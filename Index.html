@@ -189,34 +189,33 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 "use strict";
 
 /* =========================================================
-   KONFIGURATION
-   ONLINE_API = ""  → läuft sofort lokal (Mehrere Tabs/Fenster
-                      desselben Browsers spielen live mit).
-   ONLINE_API = "https://dein-backend.vercel.app"
-                 → nutzt dein gehostetes Backend für echtes
-                   Online-Spielen über Geräte hinweg.
+   SUPABASE-KONFIGURATION (browser-taugliche Keys)
+   Der Secret Key gehört NIE in diese Datei — nur in .env
+   für serverseitige Nutzung.
    ========================================================= */
-const ONLINE_API = "";
+const SUPABASE_URL = "https://cfqqbmodhfbbempeyhah.supabase.co";
+const SUPABASE_KEY = "sb_publishable_rShUuBqVgbKVC3N162qVQQ_r0GkRNe1";
 
 /* =========================================================
    KONSTANTEN
    ========================================================= */
 const DEFAULT_CATEGORIES = ["Stadt", "Land", "Fluss", "Vorname", "Tier", "Beruf"];
 const LETTERS = [..."ABCDEFGHJKLMNPRSTUVWXYZ"];
-const STORE_KEY = "wortwirbel-rooms";
+const LOCAL_STORE_KEY = "wortwirbel-rooms";
 const CHANNEL_NAME = "wortwirbel-live";
 const AVATAR_COLORS = ["a-1", "a-2", "a-3", "a-4", "a-5", "a-6"];
+const SCHEMA_HINT = "Supabase-Schema fehlt: führe supabase/schema.sql einmalig im Supabase SQL Editor aus. Bis dahin läuft das Spiel lokal (zweiter Tab).";
 
 /* =========================================================
    STATE
    ========================================================= */
 const state = {
-  screen: "home",      // home | join | room
+  screen: "home",
   name: "",
   roomName: "",
   roomCode: "",
   playerId: "",
-  snapshot: null,      // RoomSnapshot (siehe api-Schicht)
+  snapshot: null,
   categories: [...DEFAULT_CATEGORIES],
   customCategory: "",
   roundLimit: 5,
@@ -225,7 +224,9 @@ const state = {
   error: "",
   copied: false,
   lastRoundKey: "",
-  online: ONLINE_API.length > 0,
+  online: false,      // true = Supabase, false = lokal (Tabs)
+  schemaMissing: false,
+  evaluating: false,
 };
 
 /* =========================================================
@@ -256,90 +257,139 @@ function makeCode() {
   return out;
 }
 
-function shuffle(list) {
-  const arr = [...list];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
 function normalize(value) {
   return String(value ?? "").trim().toLocaleLowerCase("de-DE");
 }
 
 function avatarHtml(name, index) {
   const letter = String(name || "?").trim().slice(0, 1).toLocaleUpperCase("de-DE") || "?";
-  const color = AVATAR_COLORS[index % AVATAR_COLORS.length];
-  return `<span class="avatar ${color}" aria-hidden="true">${esc(letter)}</span>`;
+  return `<span class="avatar ${AVATAR_COLORS[index % AVATAR_COLORS.length]}" aria-hidden="true">${esc(letter)}</span>`;
 }
 
 function setError(message) {
   state.error = message || "";
 }
 
-/* =========================================================
-   LOKALER SPEICHER (geteilt zwischen Tabs)
-   ========================================================= */
-function readAllRooms() {
-  try {
-    return JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
-  } catch {
-    return {};
+function pickLetter(usedLetters) {
+  const available = LETTERS.filter((letter) => !usedLetters.includes(letter));
+  if (!available.length) return null;
+  return available[Math.floor(Math.random() * available.length)];
+}
+
+function calculatePoints(categories, answers) {
+  const pointsByPlayer = {};
+  for (const answer of answers) pointsByPlayer[answer.player_id] = {};
+
+  for (const category of categories) {
+    const counts = {};
+    for (const answer of answers) {
+      const value = (answer.values || {})[category] || "";
+      if (value) {
+        const key = normalize(value);
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    }
+    for (const answer of answers) {
+      const value = (answer.values || {})[category] || "";
+      const count = value ? counts[normalize(value)] || 0 : 0;
+      pointsByPlayer[answer.player_id][category] = value ? (count === 1 ? 20 : 10) : 0;
+    }
   }
-}
-
-function writeAllRooms(rooms) {
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(rooms));
-  } catch {
-    /* Speicher voll – Spiel läuft dann nur in-memory weiter */
-  }
-}
-
-function readRoom(code) {
-  return readAllRooms()[code] || null;
-}
-
-function writeRoom(room) {
-  const rooms = readAllRooms();
-  rooms[room.code] = room;
-  writeAllRooms(rooms);
-  broadcast(room.code);
-}
-
-function broadcast(code) {
-  try {
-    if (window.__bc) window.__bc.postMessage({ type: "sync", code, at: Date.now() });
-  } catch {
-    /* BroadcastChannel nicht verfügbar → storage-Event übernimmt */
-  }
+  return pointsByPlayer;
 }
 
 /* =========================================================
-   LOKALE SPIELLOGIK
+   SUPABASE REST-LAYER
    ========================================================= */
-function localSnapshot(room, playerId) {
-  const roundAnswers = (room.answers && room.answers[room.round]) || {};
-  const submittedIds = new Set(Object.keys(roundAnswers));
-  const categories = room.categories;
-  const players = room.players.map((player) => ({
-    ...player,
+async function sbRequest(path, options = {}) {
+  const headers = {
+    apikey: SUPABASE_KEY,
+    Authorization: `Bearer ${SUPABASE_KEY}`,
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+
+  let response;
+  try {
+    response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { ...options, headers });
+  } catch {
+    const error = new Error("Keine Verbindung zu Supabase.");
+    error.network = true;
+    throw error;
+  }
+
+  if (response.status === 204) return null;
+
+  const body = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const error = new Error(body.message || body.hint || `Supabase-Fehler (${response.status})`);
+    if (body.code === "PGRST205" || (body.message || "").includes("Could not find the table")) {
+      error.schemaMissing = true;
+    }
+    if (body.code === "23505") error.duplicate = true;
+    error.status = response.status;
+    throw error;
+  }
+  return body;
+}
+
+function sbSelect(path) { return sbRequest(path); }
+function sbInsert(table, values) {
+  return sbRequest(table, {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(values),
+  });
+}
+function sbUpsert(table, values) {
+  return sbRequest(`${table}?on_conflict=room_code,player_id,round`, {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify(values),
+  });
+}
+function sbUpdate(table, filter, values) {
+  return sbRequest(`${table}?${filter}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(values),
+  });
+}
+
+function markSchemaMissing(error) {
+  if (error && error.schemaMissing) {
+    state.schemaMissing = true;
+    state.online = false;
+  }
+}
+
+/* =========================================================
+   SNAPSHOT-AUFBAU (aus DB-Zeilen oder lokalem Raum)
+   ========================================================= */
+function buildSnapshot(room, players, answerRows, playerId) {
+  const roundAnswers = answerRows || [];
+  const submittedIds = new Set(roundAnswers.map((answer) => answer.player_id));
+  const mappedPlayers = players.map((player) => ({
+    id: player.id,
+    name: player.name,
+    score: player.score,
+    isHost: Boolean(player.is_host),
     submitted: submittedIds.has(player.id),
   }));
 
   let myAnswers = null;
-  if (room.phase === "answering" && roundAnswers[playerId]) {
-    myAnswers = roundAnswers[playerId].values;
+  if (room.phase === "answering") {
+    const mine = roundAnswers.find((answer) => answer.player_id === playerId);
+    if (mine) myAnswers = mine.values || {};
   }
 
   let results = null;
   if (room.phase === "results" || room.phase === "finished") {
-    results = Object.entries(roundAnswers).map(([pid, entry]) => ({
-      playerId: pid,
-      values: entry.values,
-      points: entry.points || null,
+    results = roundAnswers.map((answer) => ({
+      playerId: answer.player_id,
+      values: answer.values || {},
+      points: answer.points || null,
     }));
   }
 
@@ -349,44 +399,268 @@ function localSnapshot(room, playerId) {
       name: room.name,
       status: room.status,
       phase: room.phase,
-      categories,
-      roundLimit: room.roundLimit,
+      categories: room.categories || [],
+      roundLimit: room.round_limit,
       round: room.round,
-      currentLetter: room.currentLetter,
-      usedLetters: room.usedLetters || [],
+      currentLetter: room.current_letter,
+      usedLetters: room.used_letters || [],
     },
-    players,
+    players: mappedPlayers,
     myAnswers,
     results,
   };
 }
 
-function pickLetter(room) {
-  const used = room.usedLetters || [];
-  const available = LETTERS.filter((letter) => !used.includes(letter));
-  if (!available.length) return null;
-  const picked = available[Math.floor(Math.random() * available.length)];
-  return picked;
+/* =========================================================
+   REMOTE API (Supabase)
+   ========================================================= */
+async function remoteLoad(code, playerId) {
+  const rooms = await sbSelect(`game_rooms?code=eq.${encodeURIComponent(code)}&select=*`);
+  if (!rooms || !rooms.length) throw new Error("Diesen Spielraum gibt es nicht mehr.");
+  const room = rooms[0];
+
+  const [players, answerRows] = await Promise.all([
+    sbSelect(`game_players?room_code=eq.${encodeURIComponent(code)}&order=joined_at.asc`),
+    room.round > 0
+      ? sbSelect(`game_answers?room_code=eq.${encodeURIComponent(code)}&round=eq.${room.round}`)
+      : Promise.resolve([]),
+  ]);
+
+  return buildSnapshot(room, players || [], answerRows || [], playerId);
+}
+
+async function remoteCreate({ hostName, roomName, categories, roundLimit }) {
+  let room = null;
+  let code = makeCode();
+  for (let attempt = 0; attempt < 6 && !room; attempt++) {
+    try {
+      const rows = await sbInsert("game_rooms", {
+        code,
+        name: (roomName || "").trim() || `${hostName}s Runde`,
+        host_player_id: state.playerId,
+        status: "lobby",
+        phase: "lobby",
+        categories,
+        round_limit: roundLimit,
+        round: 0,
+        current_letter: null,
+        used_letters: [],
+      });
+      room = rows[0];
+    } catch (error) {
+      if (error.duplicate) { code = makeCode(); continue; }
+      throw error;
+    }
+  }
+  if (!room) throw new Error("Code konnte nicht vergeben werden.");
+
+  await sbInsert("game_players", {
+    id: state.playerId,
+    room_code: room.code,
+    name: hostName,
+    score: 0,
+    is_host: true,
+  });
+
+  return remoteLoad(room.code, state.playerId);
+}
+
+async function remoteJoin(code, name) {
+  const rooms = await sbSelect(`game_rooms?code=eq.${encodeURIComponent(code)}&select=*`);
+  if (!rooms || !rooms.length) throw new Error("Diesen Spielraum gibt es nicht mehr.");
+  const room = rooms[0];
+  if (room.status !== "lobby") throw new Error("Diese Runde läuft bereits.");
+
+  const players = await sbSelect(`game_players?room_code=eq.${encodeURIComponent(code)}&select=id`);
+  if (players && players.length >= 12) throw new Error("Raum ist voll (max. 12).");
+
+  const existing = (players || []).find((player) => player.id === state.playerId);
+  if (!existing) {
+    try {
+      await sbInsert("game_players", {
+        id: state.playerId,
+        room_code: code,
+        name,
+        score: 0,
+        is_host: false,
+      });
+    } catch (error) {
+      if (!error.duplicate) throw error;
+    }
+  }
+  return remoteLoad(code, state.playerId);
+}
+
+async function remoteAction(code, actionName) {
+  const snapshot = state.snapshot;
+  if (!snapshot) throw new Error("Raum nicht geladen.");
+  const me = snapshot.players.find((player) => player.id === state.playerId);
+  if (!me || !me.isHost) throw new Error("Nur die Spielleitung.");
+
+  if (actionName === "start") {
+    if (snapshot.room.phase !== "lobby") throw new Error("Läuft bereits.");
+    if (snapshot.players.length < 2) throw new Error("Warte auf Mitspieler.");
+    const letter = pickLetter(snapshot.room.usedLetters);
+    if (!letter) throw new Error("Keine Buchstaben mehr frei.");
+    const updated = await sbUpdate(
+      "game_rooms",
+      `code=eq.${encodeURIComponent(code)}&phase=eq.lobby`,
+      { status: "playing", phase: "answering", round: 1, current_letter: letter, used_letters: [letter] },
+    );
+    if (!updated || !updated.length) throw new Error("Runde wurde bereits gestartet.");
+    return remoteLoad(code, state.playerId);
+  }
+
+  if (snapshot.room.phase !== "results") throw new Error("Runde noch nicht ausgewertet.");
+
+  if (snapshot.room.round >= snapshot.room.roundLimit) {
+    await sbUpdate(`code=eq.${encodeURIComponent(code)}`, { status: "finished", phase: "finished" });
+    return remoteLoad(code, state.playerId);
+  }
+
+  const letter = pickLetter(snapshot.room.usedLetters);
+  const nextRound = snapshot.room.round + 1;
+  const usedLetters = [...snapshot.room.usedLetters, letter || ""].filter(Boolean);
+  if (!letter) {
+    await sbUpdate(`code=eq.${encodeURIComponent(code)}`, { status: "finished", phase: "finished" });
+    return remoteLoad(code, state.playerId);
+  }
+  const updated = await sbUpdate(
+    "game_rooms",
+    `code=eq.${encodeURIComponent(code)}&phase=eq.results`,
+    { phase: "answering", round: nextRound, current_letter: letter, used_letters: usedLetters },
+  );
+  if (!updated || !updated.length) throw new Error("Runde wurde bereits fortgesetzt.");
+  return remoteLoad(code, state.playerId);
+}
+
+async function remoteAnswer(code, values, snapshot) {
+  const letter = snapshot.room.currentLetter || "";
+  const cleaned = {};
+  for (const category of snapshot.room.categories) {
+    const raw = String(values[category] ?? "").trim().slice(0, 40);
+    if (raw && raw[0].toLocaleUpperCase("de-DE") !== letter) {
+      throw new Error(`„${raw}“ beginnt nicht mit ${letter}.`);
+    }
+    cleaned[category] = raw;
+  }
+  if (!Object.values(cleaned).some(Boolean)) throw new Error("Mindestens ein Wort eingeben.");
+
+  await sbUpsert("game_answers", {
+    room_code: code,
+    player_id: state.playerId,
+    round: snapshot.room.round,
+    values: cleaned,
+    points: null,
+  });
+
+  const fresh = await remoteLoad(code, state.playerId);
+  await maybeEvaluate(fresh);
+  return fresh;
+}
+
+/* Wertung: läuft beim Host aus, sobald alle Antworten da sind.
+   Bedingtes Update auf phase='results' verhindert doppelte Wertung. */
+async function maybeEvaluate(snapshot) {
+  if (!state.online || !snapshot || state.evaluating) return;
+  if (snapshot.room.phase !== "answering" || snapshot.room.round < 1) return;
+  if (!snapshot.players.some((player) => player.id === state.playerId && player.isHost)) return;
+
+  const allSubmitted = snapshot.players.length > 0 && snapshot.players.every((player) => player.submitted);
+  if (!allSubmitted) return;
+
+  state.evaluating = true;
+  try {
+    const code = snapshot.room.code;
+    const claimed = await sbUpdate(
+      "game_rooms",
+      `code=eq.${encodeURIComponent(code)}&phase=eq.answering&round=eq.${snapshot.room.round}`,
+      { phase: "results" },
+    );
+    if (!claimed || !claimed.length) return; // schon ausgewertet
+
+    const answers = await sbSelect(
+      `game_answers?room_code=eq.${encodeURIComponent(code)}&round=eq.${snapshot.room.round}`,
+    );
+    if (!answers || answers.length < snapshot.players.length) return;
+
+    const points = calculatePoints(snapshot.room.categories, answers);
+
+    for (const answer of answers) {
+      await sbUpdate(
+        "game_answers",
+        `room_code=eq.${encodeURIComponent(code)}&player_id=eq.${encodeURIComponent(answer.player_id)}&round=eq.${snapshot.room.round}`,
+        { points: points[answer.player_id] || {} },
+      );
+    }
+    for (const player of snapshot.players) {
+      const earned = Object.values(points[player.id] || {}).reduce((sum, value) => sum + value, 0);
+      if (earned === 0 && !points[player.id]) continue;
+      await sbUpdate(
+        "game_players",
+        `room_code=eq.${encodeURIComponent(code)}&id=eq.${encodeURIComponent(player.id)}`,
+        { score: player.score + earned },
+      );
+    }
+  } catch (error) {
+    markSchemaMissing(error);
+  } finally {
+    state.evaluating = false;
+  }
+}
+
+/* =========================================================
+   LOKALER FALLBACK (kein Supabase-Schema: Tabs synchron)
+   ========================================================= */
+function readAllRooms() {
+  try { return JSON.parse(localStorage.getItem(LOCAL_STORE_KEY) || "{}"); }
+  catch { return {}; }
+}
+function writeAllRooms(rooms) {
+  try { localStorage.setItem(LOCAL_STORE_KEY, JSON.stringify(rooms)); } catch { /* voll */ }
+}
+function readRoom(code) { return readAllRooms()[code] || null; }
+function writeRoom(room) {
+  const rooms = readAllRooms();
+  rooms[room.code] = room;
+  writeAllRooms(rooms);
+  try { window.__bc?.postMessage({ type: "sync", code: room.code, at: Date.now() }); } catch { /* egal */ }
+}
+
+function localSnapshot(room, playerId) {
+  const roundAnswers = (room.answers && room.answers[room.round]) || {};
+  const submittedIds = new Set(Object.keys(roundAnswers));
+  let myAnswers = null;
+  if (room.phase === "answering" && roundAnswers[playerId]) myAnswers = roundAnswers[playerId].values;
+  let results = null;
+  if (room.phase === "results" || room.phase === "finished") {
+    results = Object.entries(roundAnswers).map(([pid, entry]) => ({
+      playerId: pid, values: entry.values, points: entry.points || null,
+    }));
+  }
+  return {
+    room: {
+      code: room.code, name: room.name, status: room.status, phase: room.phase,
+      categories: room.categories, roundLimit: room.roundLimit, round: room.round,
+      currentLetter: room.currentLetter, usedLetters: room.usedLetters || [],
+    },
+    players: room.players.map((player) => ({ ...player, submitted: submittedIds.has(player.id) })),
+    myAnswers,
+    results,
+  };
 }
 
 function localCreate({ name, roomName, categories, roundLimit }) {
   let code = makeCode();
   for (let i = 0; i < 6 && readRoom(code); i++) code = makeCode();
-
   const room = {
     code,
     name: (roomName || "").trim() || `${name}s Runde`,
     hostPlayerId: state.playerId,
-    status: "lobby",
-    phase: "lobby",
-    categories,
-    roundLimit,
-    round: 0,
-    currentLetter: null,
-    usedLetters: [],
+    status: "lobby", phase: "lobby",
+    categories, roundLimit, round: 0, currentLetter: null, usedLetters: [],
     players: [{ id: state.playerId, name, score: 0, isHost: true }],
-    answers: {},
-    createdAt: Date.now(),
+    answers: {}, createdAt: Date.now(),
   };
   writeRoom(room);
   return localSnapshot(room, state.playerId);
@@ -397,82 +671,56 @@ function localJoin(code, name) {
   if (!room) throw new Error("Diesen Spielraum gibt es nicht mehr.");
   if (room.status !== "lobby") throw new Error("Diese Runde läuft bereits.");
   if (room.players.length >= 12) throw new Error("Raum ist voll (max. 12).");
-
-  const existing = room.players.find((player) => player.id === state.playerId);
-  if (!existing) {
+  if (!room.players.some((player) => player.id === state.playerId)) {
     room.players.push({ id: state.playerId, name, score: 0, isHost: false });
     writeRoom(room);
   }
   return localSnapshot(room, state.playerId);
 }
 
-function localAction(action) {
+function localScoreRound(room, roundAnswers) {
+  const points = calculatePoints(room.categories, Object.entries(roundAnswers).map(([pid, entry]) => ({
+    player_id: pid, values: entry.values,
+  })));
+  for (const [pid, entry] of Object.entries(roundAnswers)) {
+    entry.points = points[pid] || {};
+    const earned = Object.values(entry.points).reduce((sum, value) => sum + value, 0);
+    const player = room.players.find((item) => item.id === pid);
+    if (player) player.score += earned;
+  }
+}
+
+function localAction(actionName) {
   const room = readRoom(state.roomCode);
   if (!room) throw new Error("Spielraum nicht gefunden.");
   if (room.hostPlayerId !== state.playerId) throw new Error("Nur die Spielleitung.");
 
-  if (action === "start") {
+  if (actionName === "start") {
     if (room.phase !== "lobby") throw new Error("Läuft bereits.");
     if (room.players.length < 2) throw new Error("Warte auf Mitspieler.");
-    const letter = pickLetter(room);
-    if (!letter) throw new Error("Keine Buchstaben mehr frei.");
-    room.status = "playing";
-    room.phase = "answering";
-    room.round = 1;
-    room.currentLetter = letter;
-    room.usedLetters = [letter];
+    const letter = pickLetter(room.usedLetters);
+    room.status = "playing"; room.phase = "answering"; room.round = 1;
+    room.currentLetter = letter; room.usedLetters = [letter];
     writeRoom(room);
     return localSnapshot(room, state.playerId);
   }
 
   if (room.phase !== "results") throw new Error("Runde noch nicht ausgewertet.");
   if (room.round >= room.roundLimit) {
-    room.status = "finished";
-    room.phase = "finished";
+    room.status = "finished"; room.phase = "finished";
     writeRoom(room);
     return localSnapshot(room, state.playerId);
   }
-  const letter = pickLetter(room);
+  const letter = pickLetter(room.usedLetters);
   if (!letter) {
-    room.status = "finished";
-    room.phase = "finished";
+    room.status = "finished"; room.phase = "finished";
     writeRoom(room);
     return localSnapshot(room, state.playerId);
   }
-  room.phase = "answering";
-  room.round += 1;
-  room.currentLetter = letter;
-  room.usedLetters.push(letter);
+  room.phase = "answering"; room.round += 1;
+  room.currentLetter = letter; room.usedLetters.push(letter);
   writeRoom(room);
   return localSnapshot(room, state.playerId);
-}
-
-function scoreRound(room, roundAnswers) {
-  const pointsByPlayer = {};
-  for (const [pid] of Object.entries(roundAnswers)) pointsByPlayer[pid] = {};
-
-  for (const category of room.categories) {
-    const counts = {};
-    for (const entry of Object.values(roundAnswers)) {
-      const value = entry.values[category] ?? "";
-      if (value) {
-        const key = normalize(value);
-        counts[key] = (counts[key] || 0) + 1;
-      }
-    }
-    for (const [pid, entry] of Object.entries(roundAnswers)) {
-      const value = entry.values[category] ?? "";
-      const count = value ? counts[normalize(value)] || 0 : 0;
-      pointsByPlayer[pid][category] = value ? (count === 1 ? 20 : 10) : 0;
-    }
-  }
-
-  for (const [pid, entry] of Object.entries(roundAnswers)) {
-    entry.points = pointsByPlayer[pid];
-    const earned = Object.values(entry.points).reduce((total, value) => total + value, 0);
-    const player = room.players.find((item) => item.id === pid);
-    if (player) player.score += earned;
-  }
 }
 
 function localAnswer(values) {
@@ -496,10 +744,9 @@ function localAnswer(values) {
   if (!Object.values(cleaned).some(Boolean)) throw new Error("Mindestens ein Wort eingeben.");
 
   room.answers[round][state.playerId] = { values: cleaned, points: null };
-
   const allDone = room.players.every((player) => Boolean(room.answers[round][player.id]));
   if (allDone) {
-    scoreRound(room, room.answers[round]);
+    localScoreRound(room, room.answers[round]);
     room.phase = "results";
   }
   writeRoom(room);
@@ -507,75 +754,38 @@ function localAnswer(values) {
 }
 
 /* =========================================================
-   API-SCHICHT (online ODER lokal)
+   API-FASSADE (online oder lokal)
    ========================================================= */
-async function onlineCall(path, options) {
-  const response = await fetch(ONLINE_API.replace(/\/$/, "") + path, options);
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Verbindung zum Server fehlgeschlagen.");
-  return data;
-}
-
 const api = {
-  async create(payload) {
-    if (!state.online) return localCreate(payload);
-    const data = await onlineCall("/api/rooms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, playerId: state.playerId }),
-    });
-    return data;
+  create(payload) {
+    return state.online ? remoteCreate(payload) : Promise.resolve(localCreate(payload));
   },
-
-  async join(code, name) {
-    if (!state.online) return localJoin(code, name);
-    await onlineCall(`/api/rooms/${encodeURIComponent(code)}/join`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerId: state.playerId, name }),
-    });
-    return this.load(code);
+  join(code, name) {
+    return state.online ? remoteJoin(code, name) : Promise.resolve(localJoin(code, name));
   },
-
-  async load(code, playerId = state.playerId) {
-    if (!state.online) {
+  load(code, playerId = state.playerId) {
+    return state.online ? remoteLoad(code, playerId) : (() => {
       const room = readRoom(code);
       if (!room) throw new Error("Diesen Spielraum gibt es nicht mehr.");
-      return localSnapshot(room, playerId);
-    }
-    return onlineCall(`/api/rooms/${encodeURIComponent(code)}?playerId=${encodeURIComponent(playerId)}`);
+      return Promise.resolve(localSnapshot(room, playerId));
+    })();
   },
-
-  async action(code, actionName) {
-    if (!state.online) return localAction(actionName);
-    return onlineCall(`/api/rooms/${encodeURIComponent(code)}/action`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerId: state.playerId, action: actionName }),
-    }).then(() => this.load(code));
+  action(code, actionName) {
+    return state.online ? remoteAction(code, actionName) : Promise.resolve(localAction(actionName));
   },
-
-  async answer(code, values) {
-    if (!state.online) return localAnswer(values);
-    await onlineCall(`/api/rooms/${encodeURIComponent(code)}/answer`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerId: state.playerId, round: state.snapshot?.room.round, values }),
-    });
-    return this.load(code);
+  answer(code, values) {
+    return state.online ? remoteAnswer(code, values, state.snapshot) : Promise.resolve(localAnswer(values));
   },
 };
 
 /* =========================================================
-   LIVE-SYNC (BroadcastChannel lokal / SSE online)
+   LIVE-SYNC (Supabase Realtime + Polling; lokal: BroadcastChannel)
    ========================================================= */
 let syncTimer = null;
 function scheduleRefresh() {
   if (state.screen !== "room" || !state.roomCode || !state.playerId) return;
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => {
-    void refreshRoom(true);
-  }, 120);
+  syncTimer = setTimeout(() => { void refreshRoom(true); }, 120);
 }
 
 async function refreshRoom(silent) {
@@ -589,59 +799,106 @@ async function refreshRoom(silent) {
     if (data.myAnswers) state.answers = { ...data.myAnswers };
     state.snapshot = data;
     render();
+    if (state.online) await maybeEvaluate(data);
     return data;
   } catch (err) {
+    markSchemaMissing(err);
     if (!silent) setError(err.message);
     render();
     return null;
   }
 }
 
-function startLiveSync() {
-  stopLiveSync();
+function startRealtime(code) {
+  if (!state.online) return;
+  try {
+    const host = SUPABASE_URL.replace("https://", "");
+    const ws = new WebSocket(`wss://${host}/realtime/v1/websocket?apikey=${encodeURIComponent(SUPABASE_KEY)}&vsn=1.0.0`);
+    const topic = `realtime:room:${code}`;
+    const heartbeat = setInterval(() => {
+      if (ws.readyState === 1) ws.send(JSON.stringify([null, "hb", "phoenix", "heartbeat", {}]));
+    }, 30000);
 
-  if (state.online) {
-    const url = `${ONLINE_API.replace(/\/$/, "")}/api/rooms/${encodeURIComponent(state.roomCode)}/events?playerId=${encodeURIComponent(state.playerId)}`;
-    try {
-      const source = new EventSource(url);
-      const reload = () => void refreshRoom(true);
-      ["player:joined", "game:started", "round:started", "round:results", "game:finished", "answer:submitted"].forEach((name) => {
-        source.addEventListener(name, reload);
-      });
-      window.__sse = source;
-    } catch {
-      /* EventSource nicht verfügbar – Fallback unten */
-    }
-    // Fallback-Polling, falls SSE blockiert ist
-    window.__poll = setInterval(() => {
-      if (document.visibilityState === "visible") void refreshRoom(true);
-    }, 4000);
-    return;
-  }
+    ws.addEventListener("open", () => {
+      ws.send(JSON.stringify(["1", "1", topic, {
+        access_token: SUPABASE_KEY,
+        config: {
+          postgres_changes: [
+            { event: "*", schema: "public", table: "game_rooms", filter: `code=eq.${code}` },
+            { event: "*", schema: "public", table: "game_players", filter: `room_code=eq.${code}` },
+            { event: "*", schema: "public", table: "game_answers", filter: `room_code=eq.${code}` },
+          ],
+        },
+      }, "phx_join"]));
+    });
 
+    ws.addEventListener("message", (event) => {
+      try {
+        const frame = JSON.parse(event.data);
+        if (!Array.isArray(frame)) return;
+        const event_name = frame[3];
+        if (event_name === "postgres_changes" || event_name === "broadcast") scheduleRefresh();
+        if (event_name === "phx_reply" && frame[5]?.status === "error") { try { ws.close(); } catch { /* egal */ } }
+      } catch { /* frame ignorieren */ }
+    });
+
+    ws.addEventListener("error", () => { /* Polling übernimmt */ });
+    ws.addEventListener("close", () => { clearInterval(heartbeat); });
+    window.__realtime = { ws, heartbeat };
+  } catch { /* Polling übernimmt */ }
+}
+
+function startLocalChannel() {
   try {
     window.__bc = new BroadcastChannel(CHANNEL_NAME);
     window.__bc.onmessage = (event) => {
       if (event.data?.code === state.roomCode) scheduleRefresh();
     };
-  } catch {
-    /* BroadcastChannel nicht verfügbar */
-  }
+  } catch { /* nicht unterstützt → storage-Event */ }
   window.addEventListener("storage", onStorageEvent);
 }
 
 function onStorageEvent(event) {
-  if (event.key === STORE_KEY && event.newValue !== null) scheduleRefresh();
+  if (event.key === LOCAL_STORE_KEY && event.newValue !== null) scheduleRefresh();
+}
+
+function startLiveSync() {
+  stopLiveSync();
+  if (state.online) {
+    startRealtime(state.roomCode);
+    window.__poll = setInterval(() => {
+      if (document.visibilityState === "visible") void refreshRoom(true);
+    }, 3000);
+  } else {
+    startLocalChannel();
+  }
 }
 
 function stopLiveSync() {
-  try { window.__sse?.close(); } catch { /* egal */ }
+  try { window.__realtime?.ws?.close(); clearInterval(window.__realtime?.heartbeat); } catch { /* egal */ }
+  window.__realtime = null;
   try { window.__bc?.close(); } catch { /* egal */ }
-  window.__sse = null;
   window.__bc = null;
   clearInterval(window.__poll);
   window.__poll = null;
   window.removeEventListener("storage", onStorageEvent);
+}
+
+async function probeSupabase() {
+  try {
+    await sbSelect("game_rooms?select=code&limit=1");
+    state.online = true;
+    state.schemaMissing = false;
+  } catch (error) {
+    if (error.schemaMissing) {
+      state.online = false;
+      state.schemaMissing = true;
+    } else if (error.network) {
+      state.online = false;
+    } else {
+      state.online = true;
+    }
+  }
 }
 
 /* =========================================================
@@ -649,7 +906,7 @@ function stopLiveSync() {
    ========================================================= */
 async function createRoom() {
   const cleanName = state.name.trim();
-  if (cleanName.length < 2) return setError("Name zu kurz."), render();
+  if (cleanName.length < 2) { setError("Name zu kurz."); return render(); }
 
   state.busy = true;
   setError("");
@@ -664,7 +921,7 @@ async function createRoom() {
       categories: state.categories,
       roundLimit: state.roundLimit,
     });
-    const code = data.code || data.room?.code;
+    const code = data.room.code;
     if (!code) throw new Error("Fehler beim Erstellen.");
 
     localStorage.setItem("wortwirbel-player-name", cleanName);
@@ -677,7 +934,8 @@ async function createRoom() {
     startLiveSync();
     await refreshRoom(true);
   } catch (err) {
-    setError(err.message);
+    markSchemaMissing(err);
+    setError(err.message || "Fehler beim Erstellen.");
   } finally {
     state.busy = false;
     render();
@@ -687,8 +945,8 @@ async function createRoom() {
 async function joinRoom() {
   const cleanName = state.name.trim();
   const cleanCode = state.roomCode.trim().toUpperCase();
-  if (cleanName.length < 2) return setError("Name zu kurz."), render();
-  if (!/^[A-Z0-9]{6}$/.test(cleanCode)) return setError("Code besteht aus 6 Zeichen."), render();
+  if (cleanName.length < 2) { setError("Name zu kurz."); return render(); }
+  if (!/^[A-Z0-9]{6}$/.test(cleanCode)) { setError("Code besteht aus 6 Zeichen."); return render(); }
 
   state.busy = true;
   setError("");
@@ -703,14 +961,15 @@ async function joinRoom() {
     localStorage.setItem("wortwirbel-player-name", cleanName);
     localStorage.setItem(storageKey, state.playerId);
     state.roomCode = cleanCode;
-    state.snapshot = data || null;
+    state.snapshot = data;
     state.lastRoundKey = "";
     setHash(cleanCode);
     state.screen = "room";
     startLiveSync();
     await refreshRoom(true);
   } catch (err) {
-    setError(err.message);
+    markSchemaMissing(err);
+    setError(err.message || "Beitritt fehlgeschlagen.");
   } finally {
     state.busy = false;
     render();
@@ -724,10 +983,13 @@ async function runAction(actionName) {
   render();
   try {
     const data = await api.action(state.snapshot.room.code, actionName);
-    if (data && data.room) state.snapshot = data;
-    else await refreshRoom(true);
+    state.snapshot = data;
+    state.lastRoundKey = `${state.roomCode}:${data.room.round}`;
+    if (data.room.phase === "answering") state.answers = {};
+    render();
   } catch (err) {
-    setError(err.message);
+    markSchemaMissing(err);
+    setError(err.message || "Aktion fehlgeschlagen.");
   } finally {
     state.busy = false;
     render();
@@ -741,9 +1003,9 @@ async function submitAnswers() {
     const value = (state.answers[category] || "").trim();
     return value && value[0].toLocaleUpperCase("de-DE") !== letter;
   });
-  if (invalid) return setError(`Muss mit ${letter} beginnen.`), render();
+  if (invalid) { setError(`Muss mit ${letter} beginnen.`); return render(); }
   if (!Object.values(state.answers).some((value) => String(value).trim())) {
-    return setError("Mindestens ein Wort eingeben."), render();
+    setError("Mindestens ein Wort eingeben."); return render();
   }
 
   state.busy = true;
@@ -751,10 +1013,11 @@ async function submitAnswers() {
   render();
   try {
     const data = await api.answer(state.snapshot.room.code, state.answers);
-    if (data && data.room) state.snapshot = data;
-    else await refreshRoom(true);
+    state.snapshot = data;
+    render();
   } catch (err) {
-    setError(err.message);
+    markSchemaMissing(err);
+    setError(err.message || "Speichern fehlgeschlagen.");
   } finally {
     state.busy = false;
     render();
@@ -765,12 +1028,10 @@ function addCategory() {
   const value = state.customCategory.trim().slice(0, 28);
   if (!value) return;
   if (state.categories.some((category) => normalize(category) === normalize(value))) {
-    setError("Gibt es schon.");
-    return render();
+    setError("Gibt es schon."); return render();
   }
   if (state.categories.length >= 8) {
-    setError("Maximal 8 Kategorien.");
-    return render();
+    setError("Maximal 8 Kategorien."); return render();
   }
   state.categories = [...state.categories, value];
   state.customCategory = "";
@@ -812,13 +1073,9 @@ async function copyText(value) {
     }
     state.copied = true;
     render();
-    setTimeout(() => {
-      state.copied = false;
-      render();
-    }, 1800);
+    setTimeout(() => { state.copied = false; render(); }, 1800);
   } catch {
-    setError("Kopieren fehlgeschlagen.");
-    render();
+    setError("Kopieren fehlgeschlagen."); render();
   }
 }
 
@@ -826,9 +1083,7 @@ function setHash(code) {
   try {
     if (code) history.replaceState(null, "", `${location.pathname}${location.search}#${code}`);
     else history.replaceState(null, "", location.pathname + location.search);
-  } catch {
-    /* egal */
-  }
+  } catch { /* egal */ }
 }
 
 /* =========================================================
@@ -854,6 +1109,12 @@ function renderTopbar() {
 
 function errorHtml() {
   return state.error ? `<p class="error-text" role="alert">${esc(state.error)}</p>` : "";
+}
+
+function modeNote() {
+  if (state.schemaMissing) return `<p class="mode-note">${esc(SCHEMA_HINT)}</p>`;
+  if (state.online) return `<p class="mode-note">Online: Supabase · Live synchron</p>`;
+  return `<p class="mode-note">Offline-Modus: öffne die Seite in einem zweiten Tab.</p>`;
 }
 
 function renderHome() {
@@ -895,7 +1156,7 @@ function renderHome() {
             ${state.busy ? "…" : "Spiel erstellen"}
           </button>
         </form>
-        <p class="mode-note">${state.online ? "Online-Modus: Verbunden mit dem Server." : "Lokaler Multiplayer: öffne die Seite in einem zweiten Tab."}</p>
+        ${modeNote()}
       </section>
     </main>`;
 }
@@ -919,6 +1180,7 @@ function renderJoin() {
             ${state.busy ? "…" : "Beitreten"}
           </button>
         </form>
+        ${modeNote()}
       </section>
     </main>`;
 }
@@ -1060,7 +1322,6 @@ function renderRoom() {
 }
 
 function render() {
-  // Fokus merken, damit Tippen nicht unterbrochen wird
   const active = document.activeElement;
   const focusId = active && active.id ? active.id : null;
   const selectionStart = active && typeof active.selectionStart === "number" ? active.selectionStart : null;
@@ -1118,7 +1379,7 @@ document.addEventListener("input", (event) => {
     state[key] = value;
     if (key === "roomCode" && el.value !== value) el.value = value;
     if (state.error) setError("");
-    return; // kein Re-Render beim Tippen
+    return;
   }
 
   if (el.dataset.answer) {
@@ -1149,40 +1410,31 @@ document.addEventListener("keydown", (event) => {
 /* =========================================================
    START
    ========================================================= */
-function boot() {
+async function boot() {
   const savedName = localStorage.getItem("wortwirbel-player-name");
   if (savedName) state.name = savedName;
 
-  // Einstieg über #CODE (GitHub-Pages-tauglich) oder ?room=CODE
+  // Bestehende Spieler-ID wiederverwenden, sonst neu
   const hash = location.hash.replace("#", "").toUpperCase();
   const query = new URLSearchParams(location.search).get("room");
   const code = /^[A-Z0-9]{6}$/.test(hash) ? hash : /^[A-Z0-9]{6}$/.test(query || "") ? query.toUpperCase() : "";
 
+  await probeSupabase();
+
   if (code) {
     state.roomCode = code;
     const stored = localStorage.getItem(`wortwirbel-player-${code}`);
-    if (stored && state.online) {
+    if (stored) {
       state.playerId = stored;
-      state.screen = "room";
-      startLiveSync();
-      void refreshRoom(true).then((data) => {
-        if (!data || !data.players.some((player) => player.id === stored)) {
-          stopLiveSync();
-          state.screen = "join";
-          state.snapshot = null;
-          state.playerId = "";
-          render();
-        }
-      });
-    } else if (stored && !state.online) {
-      const room = readRoom(code);
-      if (room && room.players.some((player) => player.id === stored)) {
-        state.playerId = stored;
+      try {
+        const data = await api.load(code, stored);
+        state.snapshot = data;
+        state.lastRoundKey = `${code}:${data.room.round}`;
         state.screen = "room";
         startLiveSync();
-        void refreshRoom(true);
-      } else {
+      } catch {
         state.screen = "join";
+        state.playerId = "";
       }
     } else {
       state.screen = "join";
@@ -1192,7 +1444,7 @@ function boot() {
   render();
 }
 
-boot();
+void boot();
 </script>
 </body>
 </html>
