@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stadt Land Fluss – online spielen</title>
+<meta name="description" content="Stadt, Land, Fluss live mit Freund:innen spielen. Raum erstellen, Link teilen, los geht's.">
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f2ea; --paper:#fff; --ink:#202521; --muted:#80877c;
+    --line:#e7e6dd; --green:#244f3c; --green-dark:#193d2d; --lime:#d9ed76;
+    --red:#b14b36;
+  }
+  *{box-sizing:border-box}
+  html{min-height:100%}
+  body{min-height:100vh;margin:0;background:var(--bg);color:var(--ink);
+    font-family:Arial,Helvetica,sans-serif;-webkit-font-smoothing:antialiased}
+  button,input{font:inherit}
+  button{color:inherit;cursor:pointer}
+  button:focus-visible,input:focus-visible{outline:2px solid rgba(36,79,60,.35);outline-offset:2px}
+  button:disabled{cursor:not-allowed;opacity:.55}
+  .shell{min-height:100vh;display:flex;flex-direction:column}
+  .topbar{width:min(480px,calc(100% - 40px));margin:0 auto;min-height:64px;
+    display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .brand{border:0;padding:0;background:transparent;font-size:16px;font-weight:800;letter-spacing:-.02em}
+  .room-pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);
+    border-radius:999px;padding:6px 12px;background:var(--paper);font-size:12px;font-weight:800;letter-spacing:.08em}
+  .dot{width:7px;height:7px;border-radius:50%;background:#c5c9bc}
+  .dot.on{background:#6ea24a;box-shadow:0 0 0 3px rgba(110,162,74,.16)}
+  main{width:min(480px,calc(100% - 40px));margin:0 auto;flex:1;display:flex;
+    flex-direction:column;justify-content:center;gap:20px;padding:24px 0 48px}
+  main.room{justify-content:flex-start;padding-top:32px}
+  h1{margin:0;font-size:clamp(28px,6vw,38px);line-height:1.08;letter-spacing:-.03em;text-align:center}
+  .card{border:1px solid var(--line);border-radius:16px;padding:24px;background:var(--paper);
+    display:flex;flex-direction:column;gap:16px}
+  label{display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:var(--muted)}
+  .field{margin:0}
+  .text-input{width:100%;height:44px;padding:0 12px;border:1px solid var(--line);border-radius:8px;
+    outline:none;background:var(--paper);color:var(--ink);font-size:14px}
+  .text-input::placeholder{color:#b6b9af}
+  .text-input:focus{border-color:var(--green)}
+  .code-input{text-align:center;font-size:18px;font-weight:800;letter-spacing:.25em;text-transform:uppercase}
+  .chip-list{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;
+    background:#eef1e2;color:#42532f;font-size:12px;font-weight:700}
+  .chip button{display:grid;place-items:center;width:14px;height:14px;border:0;border-radius:50%;
+    padding:0;background:rgba(0,0,0,.08);font-size:11px;line-height:1}
+  .add-row{display:flex;gap:8px;margin-top:8px}
+  .add-row .text-input{height:40px}
+  .add-btn{width:40px;height:40px;flex:0 0 auto;border:1px solid var(--line);border-radius:8px;background:#f5f5ef;font-size:18px}
+  .round-list{display:flex;gap:8px}
+  .round-choice{width:42px;height:38px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-size:13px;font-weight:700}
+  .round-choice.active{border-color:var(--green);background:var(--green);color:#fff}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border:0;
+    border-radius:8px;padding:0 16px;background:var(--green);color:#fff;font-size:14px;font-weight:700}
+  .btn:hover:not(:disabled){background:var(--green-dark)}
+  .btn.ghost{background:var(--paper);color:var(--green);border:1px solid var(--line)}
+  .btn.small{min-height:36px;font-size:12px;padding:0 12px}
+  .full{width:100%}
+  .divider{display:flex;align-items:center;gap:10px;color:#b6b9af;font-size:11px}
+  .divider::before,.divider::after{content:"";height:1px;flex:1;background:var(--line)}
+  .error{margin:0;color:var(--red);font-size:13px}
+  .hint{margin:0;color:var(--muted);font-size:13px;text-align:center}
+  .hidden{display:none!important}
+  .code-block{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .code-block strong{font-size:28px;font-weight:800;letter-spacing:.18em}
+  .code-actions{display:flex;gap:8px}
+  ul.players,ul.scores{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  ul.players li,ul.scores li{display:flex;align-items:center;gap:10px;border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:14px}
+  ul.scores li b{margin-left:auto;color:var(--green)}
+  .host-tag{margin-left:auto;font-size:10px;font-weight:800;color:var(--green)}
+  ul.scores li .host-tag{margin-left:0}
+  .avatar-wrap{position:relative;width:28px;height:28px;flex:0 0 auto}
+  .avatar{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;font-size:12px;font-weight:800;color:#30392c}
+  .presence{position:absolute;right:-1px;bottom:-1px;width:8px;height:8px;border:1px solid #fff;border-radius:50%;background:#c5c9bc}
+  .presence.on{background:#6ea24a}
+  .a-1{background:#f3d4c8}.a-2{background:#dbe8ad}.a-3{background:#ddd3f5}
+  .a-4{background:#cfe1ee}.a-5{background:#f3dcac}.a-6{background:#eed0d9}
+  .round-row{display:flex;align-items:center;justify-content:space-between}
+  .round-row span:first-child{font-size:13px;font-weight:700;color:var(--muted)}
+  .letter{width:44px;height:44px;display:grid;place-items:center;border-radius:50%;
+    background:var(--lime);color:var(--green-dark);font-size:22px;font-weight:800}
+  .answers{display:flex;flex-direction:column;gap:10px}
+  .answer-field{display:block;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0}
+  .answer-field span{display:block;margin-bottom:4px;font-size:11px;font-weight:700;color:var(--muted)}
+  .answer-field input{width:100%;height:24px;border:0;outline:0;padding:0;background:transparent;color:var(--ink);font-size:14px}
+  .answer-field.invalid{border-color:#d6896f}
+  .ready-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+  .ready-list li{border-radius:999px;padding:4px 8px;background:#f3f3ee;color:var(--muted);font-size:11px}
+  .ready-list li.ready{background:#e7efd4;color:#3f5d32}
+  .table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+  table{width:100%;min-width:420px;border-collapse:collapse;text-align:left;font-size:13px}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line)}
+  thead th{color:var(--muted);font-size:11px}
+  tbody tr:last-child th,tbody tr:last-child td{border-bottom:0}
+  .empty{color:#b7bab0}
+  .pts{margin-left:6px;font-size:11px;color:var(--muted)}
+  .winner{margin:0;font-size:20px;font-weight:800;text-align:center}
+  @media (max-width:480px){
+    .topbar,main{width:calc(100% - 28px)}
+    .card{padding:18px}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <button class="brand" id="brandBtn" type="button">Stadt Land Fluss</button>
+    <span class="room-pill hidden" id="roomPill"><i class="dot" id="liveDot"></i><span id="roomPillCode"></span></span>
+  </header>
+
+  <!-- Start -->
+  <main id="homeScreen">
+    <h1>Stadt Land Fluss<br>online spielen.</h1>
+    <section class="card">
+      <div class="field">
+        <label for="nameInput">Name</label>
+        <input class="text-input" id="nameInput" maxlength="24" autocomplete="given-name" placeholder="Dein Name">
+      </div>
+
+      <div class="field">
+        <label>Kategorien</label>
+        <div class="chip-list" id="chipList"></div>
+        <div class="add-row">
+          <input class="text-input" id="customCat" maxlength="28" placeholder="Eigene Kategorie">
+          <button class="add-btn" id="addCatBtn" type="button" aria-label="Kategorie hinzufügen">+</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Runden</label>
+        <div class="round-list" id="roundList"></div>
+      </div>
+
+      <p class="error hidden" id="homeError"></p>
+      <button class="btn full" id="createBtn" type="button">Spiel erstellen</button>
+
+      <div class="divider">oder</div>
+
+      <div class="field">
+        <label for="codeInput">Code</label>
+        <input class="text-input code-input" id="codeInput" maxlength="6" placeholder="ABC123">
+      </div>
+      <button class="btn ghost full" id="joinBtn" type="button">Beitreten</button>
+    </section>
+  </main>
+
+  <!-- Raum -->
+  <main id="roomScreen" class="room hidden">
+    <section class="card" id="roomCard"></section>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- Konstanten & Helfer ---------- */
+const PEER_PREFIX = "slf-game-";
+const LETTERS = [..."ABCDEFGHJKLMNPRSTUVWXYZ"];
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+  const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+}));
+const makeCode = () => Array.from({length: 6}, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join("");
+const norm = (s) => s.trim().toLocaleLowerCase("de-DE");
+
+/* ---------- Setup (Startseite) ---------- */
+let categories = ["Stadt", "Land", "Fluss", "Vorname", "Tier", "Beruf"];
+let roundLimit = 5;
+
+function renderSetup() {
+  $("chipList").innerHTML = categories.map((c) =>
+    `<span class="chip">${esc(c)}${categories.length > 3 ? `<button type="button" data-remove="${esc(c)}" aria-label="${esc(c)} entfernen">×</button>` : ""}</span>`
+  ).join("");
+  $("chipList").querySelectorAll("[data-remove]").forEach((b) =>
+    b.addEventListener("click", () => { categories = categories.filter((c) => c !== b.dataset.remove); renderSetup(); })
+  );
+  $("roundList").innerHTML = [3, 5, 7, 10].map((n) =>
+    `<button type="button" class="round-choice ${n === roundLimit ? "active" : ""}" data-rounds="${n}">${n}</button>`
+  ).join("");
+  $("roundList").querySelectorAll("[data-rounds]").forEach((b) =>
+    b.addEventListener("click", () => { roundLimit = Number(b.dataset.rounds); renderSetup(); })
+  );
+}
+$("addCatBtn").addEventListener("click", addCategory);
+$("customCat").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addCategory(); } });
+function addCategory() {
+  const v = $("customCat").value.trim().slice(0, 28);
+  if (!v) return;
+  if (categories.some((c) => c.toLocaleLowerCase("de") === v.toLocaleLowerCase("de"))) return showHomeError("Gibt es schon.");
+  if (categories.length >= 8) return showHomeError("Maximal 8 Kategorien.");
+  categories.push(v); $("customCat").value = ""; hideHomeError(); renderSetup();
+}
+function showHomeError(msg) { const el = $("homeError"); el.textContent = msg; el.classList.remove("hidden"); }
+function hideHomeError() { $("homeError").classList.add("hidden"); }
+
+/* ---------- Spielzustand ---------- */
+let peer = null, guestConn = null;
+let isHost = false, myId = "", myName = "", snapshot = null, busy = false;
+
+function playerKey(code) { return "slf-player-" + code; }
+function getPlayerId(code) {
+  let id = localStorage.getItem(playerKey(code));
+  if (!id) { id = uuid(); localStorage.setItem(playerKey(code), id); }
+  return id;
+}
+function peerReady() {
+  if (typeof Peer === "undefined") { showHomeError("Verbindung nicht möglich. Internet prüfen."); return false; }
+  return true;
+}
+function validName() {
+  const n = $("nameInput").value.trim();
+  if (n.length < 2) { showHomeError("Name zu kurz."); return null; }
+  return n.slice(0, 24);
+}
+function setBusy(v) {
+  busy = v;
+  $("createBtn").disabled = v; $("joinBtn").disabled = v;
+  $("createBtn").textContent = v ? "…" : "Spiel erstellen";
+}
+
+/* ---------- Host-Logik ---------- */
+const host = {
+  state: null,        // { code, categories, roundLimit, phase, round, currentLetter, usedLetters, scoredRound }
+  players: new Map(), // playerId -> {id,name,score,isHost,online,submitted}
+  conns: new Map(),   // playerId -> DataConnection
+  answers: new Map(), // playerId -> {values, points}
+};
+
+function hostSnapshot(forId) {
+  const s = host.state;
+  const reveal = s.phase === "results" || s.phase === "finished";
+  return {
+    room: { code: s.code, categories: s.categories, roundLimit: s.roundLimit, phase: s.phase, round: s.round, currentLetter: s.currentLetter },
+    players: [...host.players.values()].map((p) => ({ id: p.id, name: p.name, score: p.score, isHost: p.isHost, online: p.online, submitted: p.submitted })),
+    myAnswers: s.phase === "answering" ? (host.answers.get(forId)?.values ?? null) : null,
+    results: reveal ? [...host.answers.entries()].map(([playerId, a]) => ({ playerId, values: a.values, points: a.points })) : null,
+  };
+}
+function hostApply() { setSnapshot(hostSnapshot(myId)); }
+function hostBroadcast() {
+  host.conns.forEach((conn, pid) => { if (conn.open) conn.send({ type: "snapshot", snapshot: hostSnapshot(pid) }); });
+  hostApply();
+}
+function hostAddSelf() {
+  host.players.set(myId, { id: myId, name: myName, score: 0, isHost: true, online: true, submitted: false });
+}
+function createRoom() {
+  const name = validName(); if (!name || !peerReady()) return;
+  if (categories.length < 3) return showHomeError("Mindestens 3 Kategorien.");
+  hideHomeError(); setBusy(true);
+  myName = name; isHost = true;
+  localStorage.setItem("slf-name", name);
+  startHost(makeCode(), 0);
+}
+function startHost(code, attempt) {
+  myId = getPlayerId(code);
+  host.state = { code, categories: [...categories], roundLimit, phase: "lobby", round: 0, currentLetter: null, usedLetters: [], scoredRound: 0 };
+  host.players.clear(); host.conns.clear(); host.answers.clear();
+  hostAddSelf();
+
+  peer = new Peer(PEER_PREFIX + code);
+  peer.on("open", () => {
+    setBusy(false);
+    history.replaceState(null, "", location.pathname + "?room=" + code);
+    enterRoomUI(code);
+    hostBroadcast();
+  });
+  peer.on("connection", (conn) => wireHostConn(conn));
+  peer.on("error", (err) => {
+    if (err.type === "unavailable-id" && attempt < 5) { try { peer.destroy(); } catch {} startHost(makeCode(), attempt + 1); return; }
+    setBusy(false); showHomeError("Verbindung fehlgeschlagen.");
+  });
+}
+function wireHostConn(conn) {
+  let pid = null;
+  conn.on("data", (data) => {
+    if (!data || typeof data !== "object") return;
+    if (data.type === "join") {
+      pid = String(data.playerId || "");
+      if (!/^[a-f0-9-]{36}$/i.test(pid)) return;
+      const name = String(data.name || "").trim().slice(0, 24);
+      if (name.length < 2) return;
+      const existing = host.players.get(pid);
+      if (!existing && host.state.phase !== "lobby") { conn.send({ type: "error", message: "Spiel läuft schon." }); return; }
+      if (!existing && host.players.size >= 12) { conn.send({ type: "error", message: "Raum ist voll." }); return; }
+      if (existing) { existing.name = name; existing.online = true; }
+      else host.players.set(pid, { id: pid, name, score: 0, isHost: false, online: true, submitted: false });
+      host.conns.set(pid, conn);
+      hostBroadcast();
+    }
+    if (data.type === "submit" && pid) hostReceiveSubmit(pid, data);
+  });
+  const offline = () => {
+    if (pid && host.players.has(pid)) { host.players.get(pid).online = false; hostBroadcast(); maybeScore(); }
+  };
+  conn.on("close", offline);
+  conn.on("error", offline);
+}
+function hostReceiveSubmit(pid, data) {
+  const s = host.state, p = host.players.get(pid);
+  if (!p || s.phase !== "answering" || data.round !== s.round) return;
+  const incoming = data.values && typeof data.values === "object" ? data.values : {};
+  const values = {};
+  for (const cat of s.categories) {
+    const v = typeof incoming[cat] === "string" ? incoming[cat].trim().slice(0, 40) : "";
+    if (v && v[0].toLocaleUpperCase("de-DE") !== s.currentLetter) return;
+    values[cat] = v;
+  }
+  if (!Object.values(values).some(Boolean)) return;
+  host.answers.set(pid, { values, points: null });
+  p.submitted = true;
+  hostBroadcast();
+  maybeScore();
+}
+function allOnlineSubmitted() {
+  const online = [...host.players.values()].filter((p) => p.online);
+  return online.length > 0 && online.every((p) => p.submitted);
+}
+function maybeScore() { if (host.state?.phase === "answering" && allOnlineSubmitted()) scoreRound(); }
+function scoreRound() {
+  const s = host.state;
+  if (s.phase !== "answering" || s.scoredRound === s.round) return;
+  s.scoredRound = s.round;
+  for (const p of host.players.values()) {
+    if (!host.answers.has(p.id)) host.answers.set(p.id, { values: {}, points: null });
+  }
+  for (const cat of s.categories) {
+    const counts = new Map();
+    host.answers.forEach((a) => { const v = (a.values[cat] || "").trim(); if (v) counts.set(norm(v), (counts.get(norm(v)) || 0) + 1); });
+    host.answers.forEach((a) => {
+      const v = (a.values[cat] || "").trim();
+      a.points = a.points || {};
+      a.points[cat] = v ? (counts.get(norm(v)) === 1 ? 20 : 10) : 0;
+    });
+  }
+  host.answers.forEach((a, pid) => {
+    const earned = Object.values(a.points || {}).reduce((t, n) => t + n, 0);
+    const p = host.players.get(pid); if (p) p.score += earned;
+  });
+  s.phase = "results";
+  hostBroadcast();
+}
+function hostAction(action) {
+  const s = host.state; if (!s) return;
+  if (action === "start") {
+    if (s.phase !== "lobby" || host.players.size < 2) return;
+    s.round = 1; s.phase = "answering"; nextLetter();
+  } else if (action === "close") {
+    scoreRound(); return;
+  } else if (action === "next") {
+    if (s.phase !== "results") return;
+    if (s.round >= s.roundLimit) { s.phase = "finished"; hostBroadcast(); return; }
+    s.round += 1; s.phase = "answering"; nextLetter();
+  }
+  hostBroadcast();
+}
+function nextLetter() {
+  const s = host.state;
+  const free = LETTERS.filter((l) => !s.usedLetters.includes(l));
+  s.currentLetter = free[Math.floor(Math.random() * free.length)];
+  s.usedLetters.push(s.currentLetter);
+  host.answers.clear();
+  host.players.forEach((p) => (p.submitted = false));
+}
+function hostSubmit(values) {
+  hostReceiveSubmit(myId, { round: host.state.round, values });
+}
+
+/* ---------- Gast-Logik ---------- */
+function joinRoom(code) {
+  const name = validName(); if (!name || !peerReady()) return;
+  code = String(code || "").trim().toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(code)) return showHomeError("Code besteht aus 6 Zeichen.");
+  hideHomeError(); setBusy(true);
+  myName = name; isHost = false; myId = getPlayerId(code);
+  localStorage.setItem("slf-name", name);
+
+  peer = new Peer(PEER_PREFIX + "guest-" + uuid());
+  peer.on("open", () => {
+    guestConn = peer.connect(PEER_PREFIX + code, { reliable: true });
+    guestConn.on("open", () => guestConn.send({ type: "join", playerId: myId, name: myName }));
+    guestConn.on("data", (data) => {
+      if (!data || typeof data !== "object") return;
+      if (data.type === "snapshot") { setBusy(false); enterRoomUI(code); setSnapshot(data.snapshot); }
+      if (data.type === "error") { setBusy(false); leaveToHome(data.message || "Beitritt fehlgeschlagen."); }
+      if (data.type === "closed") { leaveToHome("Der Host hat das Spiel beendet."); }
+    });
+    guestConn.on("close", () => setLive(false));
+    guestConn.on("error", () => setLive(false));
+  });
+  peer.on("error", (err) => {
+    setBusy(false);
+    if (err.type === "peer-unavailable") showHomeError("Raum nicht gefunden. Ist der Host online?");
+    else showHomeError("Verbindung fehlgeschlagen.");
+  });
+}
+function guestSubmit(values) {
+  if (guestConn?.open && snapshot) guestConn.send({ type: "submit", round: snapshot.room.round, values });
+}
+
+/* ---------- Anzeige ---------- */
+function enterRoomUI(code) {
+  $("homeScreen").classList.add("hidden");
+  $("roomScreen").classList.remove("hidden");
+  $("roomPill").classList.remove("hidden");
+  $("roomPillCode").textContent = code;
+  setLive(true);
+}
+function setLive(on) { $("liveDot").classList.toggle("on", !!on); }
+function setSnapshot(s) { snapshot = s; renderRoom(); }
+function leaveToHome(msg) {
+  try { peer?.destroy(); } catch {}
+  peer = null; guestConn = null; snapshot = null; isHost = false;
+  history.replaceState(null, "", location.pathname);
+  $("roomScreen").classList.add("hidden");
+  $("roomPill").classList.add("hidden");
+  $("homeScreen").classList.remove("hidden");
+  if (msg) showHomeError(msg);
+}
+$("brandBtn").addEventListener("click", () => { if (snapshot || peer) leaveToHome(); });
+
+function avatarFor(name, index, online) {
+  return `<span class="avatar-wrap"><span class="avatar a-${(index % 6) + 1}">${esc((name.trim()[0] || "?").toLocaleUpperCase("de-DE"))}</span><i class="presence ${online ? "on" : ""}"></i></span>`;
+}
+function inviteLink(code) { return location.origin + location.pathname + "?room=" + code; }
+
+async function copyText(text, btn) {
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+    else {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+    }
+    if (btn) { const old = btn.textContent; btn.textContent = "Kopiert"; setTimeout(() => (btn.textContent = old), 1600); }
+  } catch {}
+}
+
+function renderRoom() {
+  if (!snapshot) return;
+  const { room, players } = snapshot;
+  const me = players.find((p) => p.id === myId);
+  const iAmHost = !!(me && me.isHost);
+  const sorted = [...players].sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "de"));
+  const byId = new Map((snapshot.results || []).map((r) => [r.playerId, r]));
+  const card = $("roomCard");
+  let html = "";
+
+  if (room.phase === "lobby") {
+    html = `
+      <div class="code-block">
+        <strong>${esc(room.code)}</strong>
+        <div class="code-actions">
+          <button class="btn" id="copyLinkBtn" type="button">Link kopieren</button>
+        </div>
+      </div>
+      <ul class="players">
+        ${players.map((p, i) => `<li>${avatarFor(p.name, i, p.online)}<span>${esc(p.name)}${p.id === myId ? " (du)" : ""}</span>${p.isHost ? '<b class="host-tag">Host</b>' : ""}</li>`).join("")}
+      </ul>
+      ${iAmHost
+        ? `<button class="btn full" id="startBtn" type="button" ${players.length < 2 ? "disabled" : ""}>${players.length < 2 ? "Warte auf Mitspieler" : "Spiel starten"}</button>
+           <p class="hint">Lass diesen Tab offen – du bist der Host.</p>`
+        : `<p class="hint">Warte auf Start …</p>`}`;
+  }
+
+  if (room.phase === "answering") {
+    const submittedCount = players.filter((p) => p.submitted).length;
+    html = `
+      <div class="round-row"><span>Runde ${room.round}/${room.roundLimit}</span><span class="letter">${esc(room.currentLetter || "")}</span></div>
+      ${me?.submitted
+        ? `<p class="hint">Abgeschickt — ${submittedCount}/${players.length} fertig.</p>`
+        : `<form id="answerForm">
+             <div class="answers">
+               ${room.categories.map((cat) => `
+                 <label class="answer-field"><span>${esc(cat)}</span>
+                   <input name="${esc(cat)}" autocomplete="off" maxlength="40" placeholder="…">
+                 </label>`).join("")}
+             </div>
+             <p class="error hidden" id="answerError"></p>
+             <button class="btn full" style="margin-top:16px" type="submit">Abgeben</button>
+           </form>`}
+      <ul class="ready-list">
+        ${players.map((p) => `<li class="${p.submitted ? "ready" : ""}">${esc(p.name)}${p.submitted ? " ✓" : ""}</li>`).join("")}
+      </ul>
+      ${iAmHost && !allSubmittedClient(players) ? `<button class="btn ghost small" id="closeBtn" type="button">Runde beenden</button>` : ""}`;
+  }
+
+  if (room.phase === "results") {
+    html = `
+      <div class="round-row"><span>Runde ${room.round}/${room.roundLimit}</span><span class="letter">${esc(room.currentLetter || "")}</span></div>
+      <ul class="scores">
+        ${sorted.map((p, i) => `<li>${avatarFor(p.name, i, p.online)}<span>${esc(p.name)}${p.id === myId ? " (du)" : ""}</span><b>${p.score}</b></li>`).join("")}
+      </ul>
+      <div class="table-scroll"><table>
+        <thead><tr><th></th>${sorted.map((p) => `<th>${esc(p.name)}</th>`).join("")}</tr></thead>
+        <tbody>
+          ${room.categories.map((cat) => `<tr><th>${esc(cat)}</th>${sorted.map((p) => {
+            const r = byId.get(p.id); const v = r?.values?.[cat] || "—"; const pts = r?.points?.[cat] ?? 0;
+            return `<td><span class="${v === "—" ? "empty" : ""}">${esc(v)}</span><b class="pts">+${pts}</b></td>`;
+          }).join("")}</tr>`).join("")}
+        </tbody>
+      </table></div>
+      ${iAmHost
+        ? `<button class="btn full" id="nextBtn" type="button">${room.round >= room.roundLimit ? "Endstand" : "Nächste Runde"}</button>`
+        : `<p class="hint">Warte auf nächste Runde …</p>`}`;
+  }
+
+  if (room.phase === "finished") {
+    html = `
+      <p class="winner">${esc(sorted[0]?.name || "")} gewinnt 🎉</p>
+      <ul class="scores">
+        ${sorted.map((p, i) => `<li>${avatarFor(p.name, i, p.online)}<span>${esc(p.name)}${p.id === myId ? " (du)" : ""}</span><b>${p.score}</b></li>`).join("")}
+      </ul>
+      <button class="btn full" id="newBtn" type="button">Neues Spiel</button>`;
+  }
+
+  card.innerHTML = html;
+  wireRoomButtons(iAmHost);
+}
+function allSubmittedClient(players) { return players.length > 0 && players.every((p) => p.submitted); }
+
+function wireRoomButtons(iAmHost) {
+  const copyBtn = $("copyLinkBtn");
+  if (copyBtn) copyBtn.addEventListener("click", () => copyText(inviteLink(snapshot.room.code), copyBtn));
+  const startBtn = $("startBtn");
+  if (startBtn) startBtn.addEventListener("click", () => hostAction("start"));
+  const closeBtn = $("closeBtn");
+  if (closeBtn) closeBtn.addEventListener("click", () => hostAction("close"));
+  const nextBtn = $("nextBtn");
+  if (nextBtn) nextBtn.addEventListener("click", () => hostAction("next"));
+  const newBtn = $("newBtn");
+  if (newBtn) newBtn.addEventListener("click", () => location.assign(location.pathname));
+
+  const form = $("answerForm");
+  if (form) {
+    const letter = snapshot.room.currentLetter || "";
+    form.querySelectorAll("input").forEach((input) => {
+      input.addEventListener("input", () => {
+        const v = input.value.trim();
+        input.closest(".answer-field").classList.toggle("invalid", !!v && v[0].toLocaleUpperCase("de-DE") !== letter);
+      });
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const values = {};
+      let invalid = false, any = false;
+      form.querySelectorAll("input").forEach((input) => {
+        const v = input.value.trim();
+        values[input.name] = v;
+        if (v) { any = true; if (v[0].toLocaleUpperCase("de-DE") !== letter) invalid = true; }
+      });
+      const err = $("answerError");
+      if (invalid) { err.textContent = "Muss mit " + letter + " beginnen."; err.classList.remove("hidden"); return; }
+      if (!any) { err.textContent = "Gib mindestens ein Wort ein."; err.classList.remove("hidden"); return; }
+      if (isHost) hostSubmit(values); else guestSubmit(values);
+    });
+  }
+}
+
+/* ---------- Start ---------- */
+$("createBtn").addEventListener("click", createRoom);
+$("joinBtn").addEventListener("click", () => joinRoom($("codeInput").value));
+$("codeInput").addEventListener("input", (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); });
+$("nameInput").addEventListener("input", hideHomeError);
+
+$("nameInput").value = localStorage.getItem("slf-name") || "";
+const invite = new URLSearchParams(location.search).get("room");
+if (invite && /^[A-Z0-9]{6}$/i.test(invite)) $("codeInput").value = invite.toUpperCase();
+renderSetup();
+
+window.addEventListener("beforeunload", () => {
+  if (isHost) host.conns.forEach((c) => { if (c.open) c.send({ type: "closed" }); });
+});
+</script>
+</body>
+</html>
