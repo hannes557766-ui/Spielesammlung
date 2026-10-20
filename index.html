@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Stadt Land Fluss — online spielen</title>
-<meta name="description" content="Stadt Land Fluss mit Freunden: Raum erstellen, Link teilen, live mitspielen." />
+<title>Stadt Land Fluss</title>
+<meta name="description" content="Stadt Land Fluss live mit Freunden spielen." />
 <style>
 :root {
   --bg: #f4f2ea;
@@ -23,7 +23,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 button, input { font: inherit; }
@@ -45,7 +45,19 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .brand { border: 0; padding: 0; background: transparent; font-size: 16px; font-weight: 800; letter-spacing: -.02em; }
 .link-button { border: 0; padding: 0; background: transparent; color: var(--green); font-size: 13px; font-weight: 700; }
 .link-button:hover { text-decoration: underline; }
-.room-pill { border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; background: var(--paper); font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.room-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: var(--paper);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: #4f9a65; }
 
 .center-main, .room-main {
   width: min(480px, calc(100% - 40px));
@@ -57,7 +69,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   gap: 20px;
   padding: 24px 0 48px;
 }
-.room-main { justify-content: flex-start; padding-top: 32px; }
+.room-main { justify-content: flex-start; padding-top: 28px; }
 
 .page-title {
   margin: 0;
@@ -87,7 +99,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   outline: none;
   background: var(--paper);
   color: var(--ink);
-  font-size: 14px;
+  font-size: 15px;
 }
 .text-input::placeholder { color: #b6b9af; }
 .text-input:focus { border-color: var(--green); }
@@ -119,6 +131,16 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 700;
 }
 .primary-button:not(:disabled):hover { background: var(--green-dark); }
+.secondary-button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 14px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
 .full-width { width: 100%; margin-top: 18px; }
 .icon-svg { width: 16px; height: 16px; display: block; }
 .icon-button { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); flex: 0 0 auto; }
@@ -134,6 +156,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 
 .player-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .player-list li { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+.status-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.status-list li { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
 .host-tag { margin-left: auto; font-size: 10px; font-weight: 800; color: var(--green); }
 
 .avatar { width: 28px; height: 28px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 50%; font-size: 12px; font-weight: 800; color: #30392c; }
@@ -151,7 +175,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .answers-grid { display: flex; flex-direction: column; gap: 10px; }
 .answer-field { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .answer-field span { display: block; margin-bottom: 4px; font-size: 11px; font-weight: 700; color: var(--muted); }
-.answer-field input { width: 100%; height: 24px; border: 0; outline: 0; padding: 0; background: transparent; color: var(--ink); font-size: 14px; }
+.answer-field input { width: 100%; height: 26px; border: 0; outline: 0; padding: 0; background: transparent; color: var(--ink); font-size: 15px; }
 .answer-field-invalid { border-color: #d6896f; }
 
 .score-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -159,7 +183,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .score-list li b { margin-left: auto; color: var(--green); }
 
 .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
-.results-table { width: 100%; min-width: 420px; border-collapse: collapse; text-align: left; font-size: 13px; }
+.results-table { width: 100%; min-width: 400px; border-collapse: collapse; text-align: left; font-size: 13px; }
 .results-table th, .results-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .results-table thead th { color: var(--muted); font-size: 11px; font-weight: 700; }
 .results-table tbody tr:last-child th, .results-table tbody tr:last-child td { border-bottom: 0; }
@@ -168,8 +192,6 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .points-tag { margin-left: 6px; font-size: 11px; color: var(--muted); }
 
 .winner-text { margin: 0; font-size: 20px; font-weight: 800; text-align: center; }
-
-.mode-note { margin: 0 0 2px; color: var(--muted); font-size: 11px; text-align: center; }
 
 @media (max-width: 480px) {
   .topbar, .center-main, .room-main { width: calc(100% - 28px); }
@@ -182,33 +204,30 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 <body>
 <div class="app-shell">
   <header class="topbar" id="topbar"></header>
-  <main id="main"></main>
+  <div id="main"></div>
 </div>
 
-<script>
-"use strict";
-
+<script type="module">
 /* =========================================================
-   SUPABASE-KONFIGURATION (browser-taugliche Keys)
-   Der Secret Key gehört NIE in diese Datei — nur in .env
-   für serverseitige Nutzung.
+   SUPABASE LIVE-BACKEND (öffentlicher Browser-Key)
    ========================================================= */
 const SUPABASE_URL = "https://cfqqbmodhfbbempeyhah.supabase.co";
 const SUPABASE_KEY = "sb_publishable_rShUuBqVgbKVC3N162qVQQ_r0GkRNe1";
 
-/* =========================================================
-   KONSTANTEN
-   ========================================================= */
-const DEFAULT_CATEGORIES = ["Stadt", "Land", "Fluss", "Vorname", "Tier", "Beruf"];
-const LETTERS = [..."ABCDEFGHJKLMNPRSTUVWXYZ"];
-const LOCAL_STORE_KEY = "wortwirbel-rooms";
-const CHANNEL_NAME = "wortwirbel-live";
-const AVATAR_COLORS = ["a-1", "a-2", "a-3", "a-4", "a-5", "a-6"];
-const SCHEMA_HINT = "Supabase-Schema fehlt: führe supabase/schema.sql einmalig im Supabase SQL Editor aus. Bis dahin läuft das Spiel lokal (zweiter Tab).";
+let createClientFn = null;
+try {
+  ({ createClient: createClientFn } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"));
+} catch {
+  ({ createClient: createClientFn } = await import("https://esm.sh/@supabase/supabase-js@2"));
+}
 
-/* =========================================================
-   STATE
-   ========================================================= */
+const supabase = createClientFn(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+
+const DEFAULT_CATEGORIES = ["Stadt", "Land", "Fluss", "Vorname", "Tier", "Beruf"];
+const AVATAR_COLORS = ["a-1", "a-2", "a-3", "a-4", "a-5", "a-6"];
+
 const state = {
   screen: "home",
   name: "",
@@ -224,14 +243,12 @@ const state = {
   error: "",
   copied: false,
   lastRoundKey: "",
-  online: false,      // true = Supabase, false = lokal (Tabs)
-  schemaMissing: false,
-  evaluating: false,
 };
 
-/* =========================================================
-   HILFSFUNKTIONEN
-   ========================================================= */
+let activeChannel = null;
+let pollTimer = null;
+let syncTimer = null;
+
 function esc(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -250,13 +267,6 @@ function uid() {
   });
 }
 
-function makeCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < 6; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
-  return out;
-}
-
 function normalize(value) {
   return String(value ?? "").trim().toLocaleLowerCase("de-DE");
 }
@@ -267,642 +277,120 @@ function avatarHtml(name, index) {
 }
 
 function setError(message) {
-  state.error = message || "";
+  state.error = message ? String(message).replace(/^ERROR:\s*/i, "") : "";
 }
 
-function pickLetter(usedLetters) {
-  const available = LETTERS.filter((letter) => !usedLetters.includes(letter));
-  if (!available.length) return null;
-  return available[Math.floor(Math.random() * available.length)];
+function shareUrl() {
+  return `${location.origin}${location.pathname}?room=${state.roomCode}`;
 }
 
-function calculatePoints(categories, answers) {
-  const pointsByPlayer = {};
-  for (const answer of answers) pointsByPlayer[answer.player_id] = {};
-
-  for (const category of categories) {
-    const counts = {};
-    for (const answer of answers) {
-      const value = (answer.values || {})[category] || "";
-      if (value) {
-        const key = normalize(value);
-        counts[key] = (counts[key] || 0) + 1;
-      }
-    }
-    for (const answer of answers) {
-      const value = (answer.values || {})[category] || "";
-      const count = value ? counts[normalize(value)] || 0 : 0;
-      pointsByPlayer[answer.player_id][category] = value ? (count === 1 ? 20 : 10) : 0;
-    }
-  }
-  return pointsByPlayer;
-}
-
-/* =========================================================
-   SUPABASE REST-LAYER
-   ========================================================= */
-async function sbRequest(path, options = {}) {
-  const headers = {
-    apikey: SUPABASE_KEY,
-    Authorization: `Bearer ${SUPABASE_KEY}`,
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-
-  let response;
+function setUrlRoom(code) {
   try {
-    response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { ...options, headers });
-  } catch {
-    const error = new Error("Keine Verbindung zu Supabase.");
-    error.network = true;
-    throw error;
-  }
-
-  if (response.status === 204) return null;
-
-  const body = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const error = new Error(body.message || body.hint || `Supabase-Fehler (${response.status})`);
-    if (body.code === "PGRST205" || (body.message || "").includes("Could not find the table")) {
-      error.schemaMissing = true;
-    }
-    if (body.code === "23505") error.duplicate = true;
-    error.status = response.status;
-    throw error;
-  }
-  return body;
+    if (code) history.replaceState(null, "", `${location.pathname}?room=${code}`);
+    else history.replaceState(null, "", location.pathname);
+  } catch { /* ignore */ }
 }
 
-function sbSelect(path) { return sbRequest(path); }
-function sbInsert(table, values) {
-  return sbRequest(table, {
-    method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify(values),
-  });
-}
-function sbUpsert(table, values) {
-  return sbRequest(`${table}?on_conflict=room_code,player_id,round`, {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify(values),
-  });
-}
-function sbUpdate(table, filter, values) {
-  return sbRequest(`${table}?${filter}`, {
-    method: "PATCH",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify(values),
-  });
+async function rpc(fn, params) {
+  const { data, error } = await supabase.rpc(fn, params);
+  if (error) throw new Error(error.message || "Verbindungsfehler.");
+  return data;
 }
 
-function markSchemaMissing(error) {
-  if (error && error.schemaMissing) {
-    state.schemaMissing = true;
-    state.online = false;
-  }
-}
-
-/* =========================================================
-   SNAPSHOT-AUFBAU (aus DB-Zeilen oder lokalem Raum)
-   ========================================================= */
-function buildSnapshot(room, players, answerRows, playerId) {
-  const roundAnswers = answerRows || [];
-  const submittedIds = new Set(roundAnswers.map((answer) => answer.player_id));
-  const mappedPlayers = players.map((player) => ({
-    id: player.id,
-    name: player.name,
-    score: player.score,
-    isHost: Boolean(player.is_host),
-    submitted: submittedIds.has(player.id),
-  }));
-
-  let myAnswers = null;
-  if (room.phase === "answering") {
-    const mine = roundAnswers.find((answer) => answer.player_id === playerId);
-    if (mine) myAnswers = mine.values || {};
-  }
-
-  let results = null;
-  if (room.phase === "results" || room.phase === "finished") {
-    results = roundAnswers.map((answer) => ({
-      playerId: answer.player_id,
-      values: answer.values || {},
-      points: answer.points || null,
-    }));
-  }
-
-  return {
-    room: {
-      code: room.code,
-      name: room.name,
-      status: room.status,
-      phase: room.phase,
-      categories: room.categories || [],
-      roundLimit: room.round_limit,
-      round: room.round,
-      currentLetter: room.current_letter,
-      usedLetters: room.used_letters || [],
-    },
-    players: mappedPlayers,
-    myAnswers,
-    results,
-  };
-}
-
-/* =========================================================
-   REMOTE API (Supabase)
-   ========================================================= */
-async function remoteLoad(code, playerId) {
-  const rooms = await sbSelect(`game_rooms?code=eq.${encodeURIComponent(code)}&select=*`);
-  if (!rooms || !rooms.length) throw new Error("Diesen Spielraum gibt es nicht mehr.");
-  const room = rooms[0];
-
-  const [players, answerRows] = await Promise.all([
-    sbSelect(`game_players?room_code=eq.${encodeURIComponent(code)}&order=joined_at.asc`),
-    room.round > 0
-      ? sbSelect(`game_answers?room_code=eq.${encodeURIComponent(code)}&round=eq.${room.round}`)
-      : Promise.resolve([]),
-  ]);
-
-  return buildSnapshot(room, players || [], answerRows || [], playerId);
-}
-
-async function remoteCreate({ hostName, roomName, categories, roundLimit }) {
-  let room = null;
-  let code = makeCode();
-  for (let attempt = 0; attempt < 6 && !room; attempt++) {
-    try {
-      const rows = await sbInsert("game_rooms", {
-        code,
-        name: (roomName || "").trim() || `${hostName}s Runde`,
-        host_player_id: state.playerId,
-        status: "lobby",
-        phase: "lobby",
-        categories,
-        round_limit: roundLimit,
-        round: 0,
-        current_letter: null,
-        used_letters: [],
-      });
-      room = rows[0];
-    } catch (error) {
-      if (error.duplicate) { code = makeCode(); continue; }
-      throw error;
-    }
-  }
-  if (!room) throw new Error("Code konnte nicht vergeben werden.");
-
-  await sbInsert("game_players", {
-    id: state.playerId,
-    room_code: room.code,
-    name: hostName,
-    score: 0,
-    is_host: true,
-  });
-
-  return remoteLoad(room.code, state.playerId);
-}
-
-async function remoteJoin(code, name) {
-  const rooms = await sbSelect(`game_rooms?code=eq.${encodeURIComponent(code)}&select=*`);
-  if (!rooms || !rooms.length) throw new Error("Diesen Spielraum gibt es nicht mehr.");
-  const room = rooms[0];
-  if (room.status !== "lobby") throw new Error("Diese Runde läuft bereits.");
-
-  const players = await sbSelect(`game_players?room_code=eq.${encodeURIComponent(code)}&select=id`);
-  if (players && players.length >= 12) throw new Error("Raum ist voll (max. 12).");
-
-  const existing = (players || []).find((player) => player.id === state.playerId);
-  if (!existing) {
-    try {
-      await sbInsert("game_players", {
-        id: state.playerId,
-        room_code: code,
-        name,
-        score: 0,
-        is_host: false,
-      });
-    } catch (error) {
-      if (!error.duplicate) throw error;
-    }
-  }
-  return remoteLoad(code, state.playerId);
-}
-
-async function remoteAction(code, actionName) {
-  const snapshot = state.snapshot;
-  if (!snapshot) throw new Error("Raum nicht geladen.");
-  const me = snapshot.players.find((player) => player.id === state.playerId);
-  if (!me || !me.isHost) throw new Error("Nur die Spielleitung.");
-
-  if (actionName === "start") {
-    if (snapshot.room.phase !== "lobby") throw new Error("Läuft bereits.");
-    if (snapshot.players.length < 2) throw new Error("Warte auf Mitspieler.");
-    const letter = pickLetter(snapshot.room.usedLetters);
-    if (!letter) throw new Error("Keine Buchstaben mehr frei.");
-    const updated = await sbUpdate(
-      "game_rooms",
-      `code=eq.${encodeURIComponent(code)}&phase=eq.lobby`,
-      { status: "playing", phase: "answering", round: 1, current_letter: letter, used_letters: [letter] },
-    );
-    if (!updated || !updated.length) throw new Error("Runde wurde bereits gestartet.");
-    return remoteLoad(code, state.playerId);
-  }
-
-  if (snapshot.room.phase !== "results") throw new Error("Runde noch nicht ausgewertet.");
-
-  if (snapshot.room.round >= snapshot.room.roundLimit) {
-    await sbUpdate(`code=eq.${encodeURIComponent(code)}`, { status: "finished", phase: "finished" });
-    return remoteLoad(code, state.playerId);
-  }
-
-  const letter = pickLetter(snapshot.room.usedLetters);
-  const nextRound = snapshot.room.round + 1;
-  const usedLetters = [...snapshot.room.usedLetters, letter || ""].filter(Boolean);
-  if (!letter) {
-    await sbUpdate(`code=eq.${encodeURIComponent(code)}`, { status: "finished", phase: "finished" });
-    return remoteLoad(code, state.playerId);
-  }
-  const updated = await sbUpdate(
-    "game_rooms",
-    `code=eq.${encodeURIComponent(code)}&phase=eq.results`,
-    { phase: "answering", round: nextRound, current_letter: letter, used_letters: usedLetters },
-  );
-  if (!updated || !updated.length) throw new Error("Runde wurde bereits fortgesetzt.");
-  return remoteLoad(code, state.playerId);
-}
-
-async function remoteAnswer(code, values, snapshot) {
-  const letter = snapshot.room.currentLetter || "";
-  const cleaned = {};
-  for (const category of snapshot.room.categories) {
-    const raw = String(values[category] ?? "").trim().slice(0, 40);
-    if (raw && raw[0].toLocaleUpperCase("de-DE") !== letter) {
-      throw new Error(`„${raw}“ beginnt nicht mit ${letter}.`);
-    }
-    cleaned[category] = raw;
-  }
-  if (!Object.values(cleaned).some(Boolean)) throw new Error("Mindestens ein Wort eingeben.");
-
-  await sbUpsert("game_answers", {
-    room_code: code,
-    player_id: state.playerId,
-    round: snapshot.room.round,
-    values: cleaned,
-    points: null,
-  });
-
-  const fresh = await remoteLoad(code, state.playerId);
-  await maybeEvaluate(fresh);
-  return fresh;
-}
-
-/* Wertung: läuft beim Host aus, sobald alle Antworten da sind.
-   Bedingtes Update auf phase='results' verhindert doppelte Wertung. */
-async function maybeEvaluate(snapshot) {
-  if (!state.online || !snapshot || state.evaluating) return;
-  if (snapshot.room.phase !== "answering" || snapshot.room.round < 1) return;
-  if (!snapshot.players.some((player) => player.id === state.playerId && player.isHost)) return;
-
-  const allSubmitted = snapshot.players.length > 0 && snapshot.players.every((player) => player.submitted);
-  if (!allSubmitted) return;
-
-  state.evaluating = true;
+function notifyPeers() {
   try {
-    const code = snapshot.room.code;
-    const claimed = await sbUpdate(
-      "game_rooms",
-      `code=eq.${encodeURIComponent(code)}&phase=eq.answering&round=eq.${snapshot.room.round}`,
-      { phase: "results" },
-    );
-    if (!claimed || !claimed.length) return; // schon ausgewertet
+    activeChannel?.send({ type: "broadcast", event: "sync", payload: { at: Date.now() } });
+  } catch { /* ignore */ }
+}
 
-    const answers = await sbSelect(
-      `game_answers?room_code=eq.${encodeURIComponent(code)}&round=eq.${snapshot.room.round}`,
-    );
-    if (!answers || answers.length < snapshot.players.length) return;
-
-    const points = calculatePoints(snapshot.room.categories, answers);
-
-    for (const answer of answers) {
-      await sbUpdate(
-        "game_answers",
-        `room_code=eq.${encodeURIComponent(code)}&player_id=eq.${encodeURIComponent(answer.player_id)}&round=eq.${snapshot.room.round}`,
-        { points: points[answer.player_id] || {} },
-      );
-    }
-    for (const player of snapshot.players) {
-      const earned = Object.values(points[player.id] || {}).reduce((sum, value) => sum + value, 0);
-      if (earned === 0 && !points[player.id]) continue;
-      await sbUpdate(
-        "game_players",
-        `room_code=eq.${encodeURIComponent(code)}&id=eq.${encodeURIComponent(player.id)}`,
-        { score: player.score + earned },
-      );
-    }
-  } catch (error) {
-    markSchemaMissing(error);
-  } finally {
-    state.evaluating = false;
+function applySnapshot(data) {
+  if (!data || !data.room) return;
+  const roundKey = `${data.room.code}:${data.room.round}`;
+  if (state.lastRoundKey !== roundKey) {
+    state.answers = {};
+    state.lastRoundKey = roundKey;
   }
+  if (data.myAnswers) state.answers = { ...data.myAnswers };
+  state.snapshot = data;
 }
 
-/* =========================================================
-   LOKALER FALLBACK (kein Supabase-Schema: Tabs synchron)
-   ========================================================= */
-function readAllRooms() {
-  try { return JSON.parse(localStorage.getItem(LOCAL_STORE_KEY) || "{}"); }
-  catch { return {}; }
-}
-function writeAllRooms(rooms) {
-  try { localStorage.setItem(LOCAL_STORE_KEY, JSON.stringify(rooms)); } catch { /* voll */ }
-}
-function readRoom(code) { return readAllRooms()[code] || null; }
-function writeRoom(room) {
-  const rooms = readAllRooms();
-  rooms[room.code] = room;
-  writeAllRooms(rooms);
-  try { window.__bc?.postMessage({ type: "sync", code: room.code, at: Date.now() }); } catch { /* egal */ }
-}
-
-function localSnapshot(room, playerId) {
-  const roundAnswers = (room.answers && room.answers[room.round]) || {};
-  const submittedIds = new Set(Object.keys(roundAnswers));
-  let myAnswers = null;
-  if (room.phase === "answering" && roundAnswers[playerId]) myAnswers = roundAnswers[playerId].values;
-  let results = null;
-  if (room.phase === "results" || room.phase === "finished") {
-    results = Object.entries(roundAnswers).map(([pid, entry]) => ({
-      playerId: pid, values: entry.values, points: entry.points || null,
-    }));
-  }
-  return {
-    room: {
-      code: room.code, name: room.name, status: room.status, phase: room.phase,
-      categories: room.categories, roundLimit: room.roundLimit, round: room.round,
-      currentLetter: room.currentLetter, usedLetters: room.usedLetters || [],
-    },
-    players: room.players.map((player) => ({ ...player, submitted: submittedIds.has(player.id) })),
-    myAnswers,
-    results,
-  };
-}
-
-function localCreate({ name, roomName, categories, roundLimit }) {
-  let code = makeCode();
-  for (let i = 0; i < 6 && readRoom(code); i++) code = makeCode();
-  const room = {
-    code,
-    name: (roomName || "").trim() || `${name}s Runde`,
-    hostPlayerId: state.playerId,
-    status: "lobby", phase: "lobby",
-    categories, roundLimit, round: 0, currentLetter: null, usedLetters: [],
-    players: [{ id: state.playerId, name, score: 0, isHost: true }],
-    answers: {}, createdAt: Date.now(),
-  };
-  writeRoom(room);
-  return localSnapshot(room, state.playerId);
-}
-
-function localJoin(code, name) {
-  const room = readRoom(code);
-  if (!room) throw new Error("Diesen Spielraum gibt es nicht mehr.");
-  if (room.status !== "lobby") throw new Error("Diese Runde läuft bereits.");
-  if (room.players.length >= 12) throw new Error("Raum ist voll (max. 12).");
-  if (!room.players.some((player) => player.id === state.playerId)) {
-    room.players.push({ id: state.playerId, name, score: 0, isHost: false });
-    writeRoom(room);
-  }
-  return localSnapshot(room, state.playerId);
-}
-
-function localScoreRound(room, roundAnswers) {
-  const points = calculatePoints(room.categories, Object.entries(roundAnswers).map(([pid, entry]) => ({
-    player_id: pid, values: entry.values,
-  })));
-  for (const [pid, entry] of Object.entries(roundAnswers)) {
-    entry.points = points[pid] || {};
-    const earned = Object.values(entry.points).reduce((sum, value) => sum + value, 0);
-    const player = room.players.find((item) => item.id === pid);
-    if (player) player.score += earned;
-  }
-}
-
-function localAction(actionName) {
-  const room = readRoom(state.roomCode);
-  if (!room) throw new Error("Spielraum nicht gefunden.");
-  if (room.hostPlayerId !== state.playerId) throw new Error("Nur die Spielleitung.");
-
-  if (actionName === "start") {
-    if (room.phase !== "lobby") throw new Error("Läuft bereits.");
-    if (room.players.length < 2) throw new Error("Warte auf Mitspieler.");
-    const letter = pickLetter(room.usedLetters);
-    room.status = "playing"; room.phase = "answering"; room.round = 1;
-    room.currentLetter = letter; room.usedLetters = [letter];
-    writeRoom(room);
-    return localSnapshot(room, state.playerId);
-  }
-
-  if (room.phase !== "results") throw new Error("Runde noch nicht ausgewertet.");
-  if (room.round >= room.roundLimit) {
-    room.status = "finished"; room.phase = "finished";
-    writeRoom(room);
-    return localSnapshot(room, state.playerId);
-  }
-  const letter = pickLetter(room.usedLetters);
-  if (!letter) {
-    room.status = "finished"; room.phase = "finished";
-    writeRoom(room);
-    return localSnapshot(room, state.playerId);
-  }
-  room.phase = "answering"; room.round += 1;
-  room.currentLetter = letter; room.usedLetters.push(letter);
-  writeRoom(room);
-  return localSnapshot(room, state.playerId);
-}
-
-function localAnswer(values) {
-  const room = readRoom(state.roomCode);
-  if (!room) throw new Error("Spielraum nicht gefunden.");
-  if (room.phase !== "answering" || !room.currentLetter) throw new Error("Runde nicht offen.");
-
-  const round = room.round;
-  room.answers = room.answers || {};
-  if (!room.answers[round]) room.answers[round] = {};
-  if (room.answers[round][state.playerId]) return localSnapshot(room, state.playerId);
-
-  const cleaned = {};
-  for (const category of room.categories) {
-    const raw = String(values[category] ?? "").trim().slice(0, 40);
-    if (raw && raw[0].toLocaleUpperCase("de-DE") !== room.currentLetter) {
-      throw new Error(`„${raw}“ beginnt nicht mit ${room.currentLetter}.`);
-    }
-    cleaned[category] = raw;
-  }
-  if (!Object.values(cleaned).some(Boolean)) throw new Error("Mindestens ein Wort eingeben.");
-
-  room.answers[round][state.playerId] = { values: cleaned, points: null };
-  const allDone = room.players.every((player) => Boolean(room.answers[round][player.id]));
-  if (allDone) {
-    localScoreRound(room, room.answers[round]);
-    room.phase = "results";
-  }
-  writeRoom(room);
-  return localSnapshot(room, state.playerId);
-}
-
-/* =========================================================
-   API-FASSADE (online oder lokal)
-   ========================================================= */
-const api = {
-  create(payload) {
-    return state.online ? remoteCreate(payload) : Promise.resolve(localCreate(payload));
-  },
-  join(code, name) {
-    return state.online ? remoteJoin(code, name) : Promise.resolve(localJoin(code, name));
-  },
-  load(code, playerId = state.playerId) {
-    return state.online ? remoteLoad(code, playerId) : (() => {
-      const room = readRoom(code);
-      if (!room) throw new Error("Diesen Spielraum gibt es nicht mehr.");
-      return Promise.resolve(localSnapshot(room, playerId));
-    })();
-  },
-  action(code, actionName) {
-    return state.online ? remoteAction(code, actionName) : Promise.resolve(localAction(actionName));
-  },
-  answer(code, values) {
-    return state.online ? remoteAnswer(code, values, state.snapshot) : Promise.resolve(localAnswer(values));
-  },
-};
-
-/* =========================================================
-   LIVE-SYNC (Supabase Realtime + Polling; lokal: BroadcastChannel)
-   ========================================================= */
-let syncTimer = null;
-function scheduleRefresh() {
-  if (state.screen !== "room" || !state.roomCode || !state.playerId) return;
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => { void refreshRoom(true); }, 120);
-}
-
-async function refreshRoom(silent) {
+async function refreshRoom(silent = false) {
+  if (!state.roomCode || !state.playerId) return null;
   try {
-    const data = await api.load(state.roomCode, state.playerId);
-    const roundKey = `${state.roomCode}:${data.room.round}`;
-    if (state.lastRoundKey !== roundKey) {
-      state.answers = {};
-      state.lastRoundKey = roundKey;
+    const prevPhase = state.snapshot?.room.phase;
+    const prevRound = state.snapshot?.room.round;
+    const prevSubmitted = state.snapshot?.players.find((p) => p.id === state.playerId)?.submitted;
+
+    const data = await rpc("get_room_state", {
+      p_code: state.roomCode,
+      p_player_id: state.playerId,
+    });
+    applySnapshot(data);
+
+    const nowSubmitted = data.players.find((p) => p.id === state.playerId)?.submitted;
+    const answeringUnchanged =
+      state.screen === "room" &&
+      prevPhase === "answering" &&
+      data.room.phase === "answering" &&
+      prevRound === data.room.round &&
+      !prevSubmitted &&
+      !nowSubmitted &&
+      document.getElementById("answer-status-list");
+
+    // Während man selbst noch tippt: nur Statusliste patchen, Eingabefelder & Handy-Tastatur unberührt lassen!
+    if (answeringUnchanged) {
+      document.getElementById("answer-status-list").innerHTML = renderStatusItems(data.players);
+    } else {
+      render();
     }
-    if (data.myAnswers) state.answers = { ...data.myAnswers };
-    state.snapshot = data;
-    render();
-    if (state.online) await maybeEvaluate(data);
     return data;
   } catch (err) {
-    markSchemaMissing(err);
-    if (!silent) setError(err.message);
-    render();
+    if (!silent) {
+      setError(err.message);
+      render();
+    }
     return null;
   }
 }
 
-function startRealtime(code) {
-  if (!state.online) return;
-  try {
-    const host = SUPABASE_URL.replace("https://", "");
-    const ws = new WebSocket(`wss://${host}/realtime/v1/websocket?apikey=${encodeURIComponent(SUPABASE_KEY)}&vsn=1.0.0`);
-    const topic = `realtime:room:${code}`;
-    const heartbeat = setInterval(() => {
-      if (ws.readyState === 1) ws.send(JSON.stringify([null, "hb", "phoenix", "heartbeat", {}]));
-    }, 30000);
-
-    ws.addEventListener("open", () => {
-      ws.send(JSON.stringify(["1", "1", topic, {
-        access_token: SUPABASE_KEY,
-        config: {
-          postgres_changes: [
-            { event: "*", schema: "public", table: "game_rooms", filter: `code=eq.${code}` },
-            { event: "*", schema: "public", table: "game_players", filter: `room_code=eq.${code}` },
-            { event: "*", schema: "public", table: "game_answers", filter: `room_code=eq.${code}` },
-          ],
-        },
-      }, "phx_join"]));
-    });
-
-    ws.addEventListener("message", (event) => {
-      try {
-        const frame = JSON.parse(event.data);
-        if (!Array.isArray(frame)) return;
-        const event_name = frame[3];
-        if (event_name === "postgres_changes" || event_name === "broadcast") scheduleRefresh();
-        if (event_name === "phx_reply" && frame[5]?.status === "error") { try { ws.close(); } catch { /* egal */ } }
-      } catch { /* frame ignorieren */ }
-    });
-
-    ws.addEventListener("error", () => { /* Polling übernimmt */ });
-    ws.addEventListener("close", () => { clearInterval(heartbeat); });
-    window.__realtime = { ws, heartbeat };
-  } catch { /* Polling übernimmt */ }
-}
-
-function startLocalChannel() {
-  try {
-    window.__bc = new BroadcastChannel(CHANNEL_NAME);
-    window.__bc.onmessage = (event) => {
-      if (event.data?.code === state.roomCode) scheduleRefresh();
-    };
-  } catch { /* nicht unterstützt → storage-Event */ }
-  window.addEventListener("storage", onStorageEvent);
-}
-
-function onStorageEvent(event) {
-  if (event.key === LOCAL_STORE_KEY && event.newValue !== null) scheduleRefresh();
-}
-
-function startLiveSync() {
-  stopLiveSync();
-  if (state.online) {
-    startRealtime(state.roomCode);
-    window.__poll = setInterval(() => {
-      if (document.visibilityState === "visible") void refreshRoom(true);
-    }, 3000);
-  } else {
-    startLocalChannel();
-  }
+function scheduleRefresh() {
+  if (state.screen !== "room" || !state.roomCode || !state.playerId) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => { void refreshRoom(true); }, 80);
 }
 
 function stopLiveSync() {
-  try { window.__realtime?.ws?.close(); clearInterval(window.__realtime?.heartbeat); } catch { /* egal */ }
-  window.__realtime = null;
-  try { window.__bc?.close(); } catch { /* egal */ }
-  window.__bc = null;
-  clearInterval(window.__poll);
-  window.__poll = null;
-  window.removeEventListener("storage", onStorageEvent);
+  if (activeChannel) {
+    void supabase.removeChannel(activeChannel);
+    activeChannel = null;
+  }
+  clearInterval(pollTimer);
+  pollTimer = null;
 }
 
-async function probeSupabase() {
-  try {
-    await sbSelect("game_rooms?select=code&limit=1");
-    state.online = true;
-    state.schemaMissing = false;
-  } catch (error) {
-    if (error.schemaMissing) {
-      state.online = false;
-      state.schemaMissing = true;
-    } else if (error.network) {
-      state.online = false;
-    } else {
-      state.online = true;
-    }
-  }
+function startLiveSync(code) {
+  stopLiveSync();
+  activeChannel = supabase
+    .channel(`room:${code}`, { config: { broadcast: { self: false } } })
+    .on("broadcast", { event: "sync" }, () => scheduleRefresh())
+    .on("postgres_changes", { event: "*", schema: "public", table: "game_rooms", filter: `code=eq.${code}` }, () => scheduleRefresh())
+    .on("postgres_changes", { event: "*", schema: "public", table: "game_players", filter: `room_code=eq.${code}` }, () => scheduleRefresh())
+    .on("postgres_changes", { event: "*", schema: "public", table: "game_answers", filter: `room_code=eq.${code}` }, () => scheduleRefresh())
+    .subscribe();
+
+  pollTimer = setInterval(() => {
+    if (document.visibilityState === "visible") void refreshRoom(true);
+  }, 3500);
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state.screen === "room") {
+    void refreshRoom(true);
+  }
+});
 
 /* =========================================================
-   AKTIONEN
+   SPIEL-AKTIONEN
    ========================================================= */
 async function createRoom() {
   const cleanName = state.name.trim();
@@ -911,31 +399,28 @@ async function createRoom() {
   state.busy = true;
   setError("");
   render();
-  if (!state.playerId) state.playerId = uid();
+  const id = uid();
 
   try {
-    const data = await api.create({
-      hostName: cleanName,
-      roomName: state.roomName,
-      playerId: state.playerId,
-      categories: state.categories,
-      roundLimit: state.roundLimit,
+    const data = await rpc("create_game_room", {
+      p_host_id: id,
+      p_host_name: cleanName,
+      p_room_name: state.roomName,
+      p_categories: state.categories,
+      p_round_limit: state.roundLimit,
     });
     const code = data.room.code;
-    if (!code) throw new Error("Fehler beim Erstellen.");
-
     localStorage.setItem("wortwirbel-player-name", cleanName);
-    localStorage.setItem(`wortwirbel-player-${code}`, state.playerId);
+    localStorage.setItem(`wortwirbel-player-${code}`, id);
+    state.playerId = id;
     state.roomCode = code;
-    state.snapshot = null;
     state.lastRoundKey = "";
-    setHash(code);
+    applySnapshot(data);
+    setUrlRoom(code);
     state.screen = "room";
-    startLiveSync();
-    await refreshRoom(true);
+    startLiveSync(code);
   } catch (err) {
-    markSchemaMissing(err);
-    setError(err.message || "Fehler beim Erstellen.");
+    setError(err.message);
   } finally {
     state.busy = false;
     render();
@@ -953,23 +438,26 @@ async function joinRoom() {
   render();
 
   const storageKey = `wortwirbel-player-${cleanCode}`;
-  const storedId = localStorage.getItem(storageKey);
-  state.playerId = storedId || state.playerId || uid();
+  const id = localStorage.getItem(storageKey) || uid();
 
   try {
-    const data = await api.join(cleanCode, cleanName);
+    const data = await rpc("join_game_room", {
+      p_code: cleanCode,
+      p_player_id: id,
+      p_name: cleanName,
+    });
     localStorage.setItem("wortwirbel-player-name", cleanName);
-    localStorage.setItem(storageKey, state.playerId);
+    localStorage.setItem(storageKey, id);
+    state.playerId = id;
     state.roomCode = cleanCode;
-    state.snapshot = data;
     state.lastRoundKey = "";
-    setHash(cleanCode);
+    applySnapshot(data);
+    setUrlRoom(cleanCode);
     state.screen = "room";
-    startLiveSync();
-    await refreshRoom(true);
+    startLiveSync(cleanCode);
+    setTimeout(notifyPeers, 150);
   } catch (err) {
-    markSchemaMissing(err);
-    setError(err.message || "Beitritt fehlgeschlagen.");
+    setError(err.message);
   } finally {
     state.busy = false;
     render();
@@ -982,14 +470,15 @@ async function runAction(actionName) {
   setError("");
   render();
   try {
-    const data = await api.action(state.snapshot.room.code, actionName);
-    state.snapshot = data;
-    state.lastRoundKey = `${state.roomCode}:${data.room.round}`;
-    if (data.room.phase === "answering") state.answers = {};
-    render();
+    const data = await rpc("advance_game_room", {
+      p_code: state.snapshot.room.code,
+      p_player_id: state.playerId,
+      p_action: actionName,
+    });
+    applySnapshot(data);
+    notifyPeers();
   } catch (err) {
-    markSchemaMissing(err);
-    setError(err.message || "Aktion fehlgeschlagen.");
+    setError(err.message);
   } finally {
     state.busy = false;
     render();
@@ -1012,12 +501,16 @@ async function submitAnswers() {
   setError("");
   render();
   try {
-    const data = await api.answer(state.snapshot.room.code, state.answers);
-    state.snapshot = data;
-    render();
+    const data = await rpc("submit_round_answer", {
+      p_code: state.snapshot.room.code,
+      p_player_id: state.playerId,
+      p_round: state.snapshot.room.round,
+      p_values: state.answers,
+    });
+    applySnapshot(data);
+    notifyPeers();
   } catch (err) {
-    markSchemaMissing(err);
-    setError(err.message || "Speichern fehlgeschlagen.");
+    setError(err.message);
   } finally {
     state.busy = false;
     render();
@@ -1039,12 +532,6 @@ function addCategory() {
   render();
 }
 
-function openJoin() {
-  setError("");
-  state.screen = "join";
-  render();
-}
-
 function returnHome() {
   stopLiveSync();
   state.screen = "home";
@@ -1053,7 +540,7 @@ function returnHome() {
   state.roomCode = "";
   state.lastRoundKey = "";
   setError("");
-  setHash("");
+  setUrlRoom("");
   render();
 }
 
@@ -1079,13 +566,6 @@ async function copyText(value) {
   }
 }
 
-function setHash(code) {
-  try {
-    if (code) history.replaceState(null, "", `${location.pathname}${location.search}#${code}`);
-    else history.replaceState(null, "", location.pathname + location.search);
-  } catch { /* egal */ }
-}
-
 /* =========================================================
    RENDERING
    ========================================================= */
@@ -1095,14 +575,14 @@ const mainEl = document.getElementById("main");
 function renderTopbar() {
   let right = "";
   if (state.screen === "room" && state.snapshot) {
-    right = `<span class="room-pill">${esc(state.snapshot.room.code)}</span>`;
+    right = `<span class="room-pill"><span class="live-dot"></span>${esc(state.snapshot.room.code)}</span>`;
   } else if (state.screen === "home") {
-    right = `<button class="link-button" data-action="open-join">Beitreten</button>`;
+    right = `<button class="link-button" data-action="open-join" type="button">Beitreten</button>`;
   } else if (state.screen === "join") {
-    right = `<button class="link-button" data-action="home">Zurück</button>`;
+    right = `<button class="link-button" data-action="home" type="button">Zurück</button>`;
   }
   topbarEl.innerHTML = `
-    <button class="brand" data-action="home">Stadt Land Fluss</button>
+    <button class="brand" data-action="home" type="button">Stadt Land Fluss</button>
     ${right}
   `;
 }
@@ -1111,21 +591,24 @@ function errorHtml() {
   return state.error ? `<p class="error-text" role="alert">${esc(state.error)}</p>` : "";
 }
 
-function modeNote() {
-  if (state.schemaMissing) return `<p class="mode-note">${esc(SCHEMA_HINT)}</p>`;
-  if (state.online) return `<p class="mode-note">Online: Supabase · Live synchron</p>`;
-  return `<p class="mode-note">Offline-Modus: öffne die Seite in einem zweiten Tab.</p>`;
+function renderStatusItems(players) {
+  return players.map((player, index) => `
+    <li>
+      ${avatarHtml(player.name, index)}
+      <span style="${player.submitted ? "color:#244f3c;font-weight:700" : "color:#80877c"}">${esc(player.name)}</span>
+      ${player.submitted ? `<b style="color:#244f3c">✓</b>` : ""}
+    </li>`).join("");
 }
 
 function renderHome() {
   const chips = state.categories.map((category) => `
     <span class="chip">${esc(category)}
-      ${state.categories.length > 3 ? `<button class="chip-remove" data-remove-category="${esc(category)}" aria-label="${esc(category)} entfernen">×</button>` : ""}
+      ${state.categories.length > 3 ? `<button class="chip-remove" data-remove-category="${esc(category)}" type="button" aria-label="${esc(category)} entfernen">×</button>` : ""}
     </span>`).join("");
 
   const rounds = [3, 5, 7, 10].map((roundsValue) => `
     <button class="round-choice ${state.roundLimit === roundsValue ? "round-choice-active" : ""}"
-      data-rounds="${roundsValue}" aria-pressed="${state.roundLimit === roundsValue}">${roundsValue}</button>`).join("");
+      data-rounds="${roundsValue}" type="button" aria-pressed="${state.roundLimit === roundsValue}">${roundsValue}</button>`).join("");
 
   return `
     <main class="center-main">
@@ -1153,10 +636,9 @@ function renderHome() {
 
           ${errorHtml()}
           <button class="primary-button full-width" type="submit" ${state.busy ? "disabled" : ""}>
-            ${state.busy ? "…" : "Spiel erstellen"}
+            ${state.busy ? "…" : "Spiel erstellen →"}
           </button>
         </form>
-        ${modeNote()}
       </section>
     </main>`;
 }
@@ -1177,10 +659,9 @@ function renderJoin() {
 
           ${errorHtml()}
           <button class="primary-button full-width" type="submit" ${state.busy ? "disabled" : ""}>
-            ${state.busy ? "…" : "Beitreten"}
+            ${state.busy ? "…" : "Beitreten →"}
           </button>
         </form>
-        ${modeNote()}
       </section>
     </main>`;
 }
@@ -1208,15 +689,15 @@ function renderRoom() {
       <div class="code-block">
         <strong>${esc(snap.room.code)}</strong>
         <div class="code-actions">
-          <button class="icon-button" data-action="copy-code" aria-label="Code kopieren">
+          <button class="icon-button" data-action="copy-code" type="button" aria-label="Code kopieren">
             <svg class="icon-svg" viewBox="0 0 20 20" fill="none"><rect x="7" y="6" width="9" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M12.5 6V4.5a1.5 1.5 0 0 0-1.5-1.5H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" stroke="currentColor" stroke-width="1.6"/></svg>
           </button>
-          <button class="primary-button" data-action="copy-link">${state.copied ? "Kopiert" : "Link kopieren"}</button>
+          <button class="primary-button" data-action="copy-link" type="button">${state.copied ? "Kopiert ✓" : "Link kopieren"}</button>
         </div>
       </div>
       <ul class="player-list">${players}</ul>
       ${isHost
-        ? `<button class="primary-button full-width" data-action="start" ${state.busy || snap.players.length < 2 ? "disabled" : ""}>
+        ? `<button class="primary-button full-width" data-action="start" type="button" ${state.busy || snap.players.length < 2 ? "disabled" : ""}>
             ${state.busy ? "…" : snap.players.length < 2 ? "Warte auf Mitspieler" : "Spiel starten"}
            </button>`
         : `<p class="hint-text">Warte auf Start …</p>`}
@@ -1224,23 +705,16 @@ function renderRoom() {
   }
 
   if (snap.room.phase === "answering") {
-    const fields = snap.room.categories.map((category) => {
+    const fields = snap.room.categories.map((category, idx) => {
       const value = state.answers[category] || "";
       const invalid = value.trim() && value.trim()[0].toLocaleUpperCase("de-DE") !== snap.room.currentLetter;
       return `
-        <label class="answer-field ${invalid ? "answer-field-invalid" : ""}">
+        <label class="answer-field ${invalid ? "answer-field-invalid" : ""}" for="ans-${idx}">
           <span>${esc(category)}</span>
-          <input type="text" maxlength="40" autocomplete="off" placeholder="…"
+          <input id="ans-${idx}" type="text" maxlength="40" autocomplete="off" placeholder="…"
             data-answer="${esc(category)}" value="${esc(value)}" />
         </label>`;
     }).join("");
-
-    const statuses = snap.players.map((player, index) => `
-      <li style="border:0;padding:0;gap:6px;font-size:12px;">
-        ${avatarHtml(player.name, index)}
-        <span style="${player.submitted ? "color:#244f3c" : "color:#80877c"}">${esc(player.name)}</span>
-        ${player.submitted ? `<b style="margin-left:0;color:#244f3c">✓</b>` : ""}
-      </li>`).join("");
 
     content = `
       <div class="round-row">
@@ -1249,7 +723,8 @@ function renderRoom() {
       </div>
       ${hasSubmitted
         ? `<p class="hint-text">Abgeschickt — ${snap.players.filter((player) => player.submitted).length}/${snap.players.length} fertig.</p>
-           <ul class="player-list">${statuses}</ul>`
+           <ul class="status-list" id="answer-status-list">${renderStatusItems(snap.players)}</ul>
+           ${isHost ? `<button class="secondary-button" data-action="reveal" type="button" ${state.busy ? "disabled" : ""}>Runde jetzt auswerten</button>` : ""}`
         : `<form id="answer-form">
              <div class="answers-grid">${fields}</div>
              ${errorHtml()}
@@ -1257,7 +732,7 @@ function renderRoom() {
                ${state.busy ? "…" : "Abgeben"}
              </button>
            </form>
-           <ul class="player-list">${statuses}</ul>`}
+           <ul class="status-list" id="answer-status-list">${renderStatusItems(snap.players)}</ul>`}
     `;
   }
 
@@ -1293,7 +768,7 @@ function renderRoom() {
         </table>
       </div>
       ${isHost
-        ? `<button class="primary-button full-width" data-action="next" ${state.busy ? "disabled" : ""}>
+        ? `<button class="primary-button full-width" data-action="next" type="button" ${state.busy ? "disabled" : ""}>
             ${state.busy ? "…" : snap.room.round >= snap.room.roundLimit ? "Endstand" : "Nächste Runde"}
            </button>`
         : `<p class="hint-text">Warte auf nächste Runde …</p>`}
@@ -1310,13 +785,13 @@ function renderRoom() {
     content = `
       <p class="winner-text">${esc(sorted[0] ? sorted[0].name : "")} gewinnt 🎉</p>
       <ul class="score-list">${scores}</ul>
-      <button class="primary-button full-width" data-action="home">Neues Spiel</button>
+      <button class="primary-button full-width" data-action="home" type="button">Neues Spiel</button>
     `;
   }
 
   return `
     <main class="room-main">
-      ${errorHtml()}
+      ${state.screen === "room" && snap.room.phase !== "answering" ? errorHtml() : hasSubmitted ? errorHtml() : ""}
       <section class="card room-card">${content}</section>
     </main>`;
 }
@@ -1336,32 +811,29 @@ function render() {
     if (restored) {
       restored.focus({ preventScroll: true });
       if (selectionStart !== null && typeof restored.setSelectionRange === "function") {
-        try { restored.setSelectionRange(selectionStart, selectionStart); } catch { /* egal */ }
+        try { restored.setSelectionRange(selectionStart, selectionStart); } catch { /* ignore */ }
       }
     }
   }
 }
 
-/* =========================================================
-   EVENTS (Delegation)
-   ========================================================= */
 document.addEventListener("click", (event) => {
   const target = event.target.closest("[data-action], [data-rounds], [data-remove-category]");
   if (!target) return;
 
   if (target.dataset.action === "home") return returnHome();
-  if (target.dataset.action === "open-join") return openJoin();
+  if (target.dataset.action === "open-join") { setError(""); state.screen = "join"; return render(); }
   if (target.dataset.action === "add-category") return addCategory();
   if (target.dataset.action === "start") return void runAction("start");
+  if (target.dataset.action === "reveal") return void runAction("reveal");
   if (target.dataset.action === "next") return void runAction("next");
   if (target.dataset.action === "copy-code") return void copyText(state.roomCode);
-  if (target.dataset.action === "copy-link") return void copyText(`${location.origin}${location.pathname}${location.search}#${state.roomCode}`);
+  if (target.dataset.action === "copy-link") return void copyText(shareUrl());
 
   if (target.dataset.rounds) {
     state.roundLimit = Number(target.dataset.rounds);
     return render();
   }
-
   if (target.dataset.removeCategory) {
     if (state.categories.length <= 3) return;
     state.categories = state.categories.filter((item) => item !== target.dataset.removeCategory);
@@ -1371,7 +843,6 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("input", (event) => {
   const el = event.target;
-
   if (el.dataset.field) {
     const key = el.dataset.field;
     let value = el.value;
@@ -1381,7 +852,6 @@ document.addEventListener("input", (event) => {
     if (state.error) setError("");
     return;
   }
-
   if (el.dataset.answer) {
     state.answers[el.dataset.answer] = el.value;
     const letter = state.snapshot?.room.currentLetter || "";
@@ -1402,36 +872,32 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     addCategory();
   }
-  if (event.target.id === "invite-code") {
-    state.roomCode = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  }
 });
 
-/* =========================================================
-   START
-   ========================================================= */
 async function boot() {
   const savedName = localStorage.getItem("wortwirbel-player-name");
   if (savedName) state.name = savedName;
 
-  // Bestehende Spieler-ID wiederverwenden, sonst neu
   const hash = location.hash.replace("#", "").toUpperCase();
   const query = new URLSearchParams(location.search).get("room");
-  const code = /^[A-Z0-9]{6}$/.test(hash) ? hash : /^[A-Z0-9]{6}$/.test(query || "") ? query.toUpperCase() : "";
-
-  await probeSupabase();
+  const code = /^[A-Z0-9]{6}$/.test(query || "") ? query.toUpperCase() : /^[A-Z0-9]{6}$/.test(hash) ? hash : "";
 
   if (code) {
     state.roomCode = code;
     const stored = localStorage.getItem(`wortwirbel-player-${code}`);
     if (stored) {
       state.playerId = stored;
+      state.screen = "room";
+      render();
       try {
-        const data = await api.load(code, stored);
-        state.snapshot = data;
-        state.lastRoundKey = `${code}:${data.room.round}`;
-        state.screen = "room";
-        startLiveSync();
+        const data = await rpc("get_room_state", { p_code: code, p_player_id: stored });
+        if (data && data.players.some((p) => p.id === stored)) {
+          applySnapshot(data);
+          startLiveSync(code);
+        } else {
+          state.screen = "join";
+          state.playerId = "";
+        }
       } catch {
         state.screen = "join";
         state.playerId = "";
