@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de" data-theme="nordic">
+<html lang="de" data-theme="school">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -755,6 +755,70 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
+/* KI-Prüfung: Schalter, Prüf-Ansicht, abgelehnte Antworten */
+.ai-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--block-bg);
+  color: var(--ink);
+  text-align: left;
+}
+.ai-toggle:disabled { opacity: 1; cursor: default; }
+.ai-toggle-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ai-toggle-title { font-size: 14px; font-weight: 700; }
+.switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background-color .15s ease;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+  transition: transform .15s ease;
+}
+.switch.is-on { background: var(--primary); }
+.switch.is-on::after { transform: translateX(18px); }
+
+.checking-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 26px 10px;
+  text-align: center;
+}
+.checking-title { margin: 0; font-size: 16px; font-weight: 700; }
+.spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--line);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: slf-spin .8s linear infinite;
+}
+@keyframes slf-spin { to { transform: rotate(360deg); } }
+
+.answer-rejected { color: var(--danger); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.reject-mark { margin-left: 4px; color: var(--danger); font-size: 11px; font-weight: 800; }
+.ai-note { margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
+
 @media (max-width: 480px) {
   .topbar { width: calc(100% - 24px); }
   .center-main, .room-main { width: calc(100% - 24px); }
@@ -799,16 +863,16 @@ const AVATAR_COLORS = ["a-1", "a-2", "a-3", "a-4", "a-5", "a-6"];
 
 const THEME_OPTIONS = [
   {
-    id: "nordic",
-    name: "Nordic Nature",
-    desc: "Warmes Off-White, Waldgrün, feine Linien – ruhig und klar",
-    colors: ["#f6f3ec", "#fdfcf8", "#34503f", "#dfe6d2"],
-  },
-  {
     id: "school",
     name: "Klassenzimmer",
     desc: "Kariertes Papier & Collageblock, hell und schulmäßig",
     colors: ["#f7f6ef", "#ffffff", "#1e4fa8", "#ffe477"],
+  },
+  {
+    id: "nordic",
+    name: "Nordic Nature",
+    desc: "Warmes Off-White, Waldgrün, feine Linien – ruhig und klar",
+    colors: ["#f6f3ec", "#fdfcf8", "#34503f", "#dfe6d2"],
   },
   {
     id: "summer",
@@ -833,16 +897,18 @@ const state = {
   error: "",
   copied: false,
   lastRoundKey: "",
-  theme: "nordic",
+  theme: "school",
   showSettings: false,
 };
 
 let activeChannel = null;
 let pollTimer = null;
-let syncTimer = null;
 let countdownTimer = null;
 let serverOffset = 0;
-let timeoutRequestKey = "";
+let timeoutNextTry = 0;
+let timeoutInFlight = false;
+let aiCheckRunning = false;
+let lastAiAttempt = 0;
 
 function esc(value) {
   return String(value ?? "")
@@ -922,6 +988,7 @@ function applySnapshot(data, isSelf = true) {
   if (state.lastRoundKey !== roundKey) {
     state.answers = {};
     state.lastRoundKey = roundKey;
+    timeoutNextTry = 0;
   }
   if (isSelf && data.myAnswers) state.answers = { ...data.myAnswers };
   state.snapshot = data;
@@ -940,7 +1007,24 @@ function formatCountdown(seconds) {
   return `${seconds}s`;
 }
 
+async function maybeRunAiCheck() {
+  if (aiCheckRunning || state.snapshot?.room.phase !== "checking") return;
+  if (Date.now() - lastAiAttempt < 4000) return;
+  aiCheckRunning = true;
+  lastAiAttempt = Date.now();
+  try {
+    const data = await rpc("run_ai_check", { p_code: state.roomCode, p_player_id: state.playerId });
+    commitSnapshot(data, true);
+    if (data?.room?.phase !== "checking") notifyPeers(data);
+  } catch { /* nächster Versuch in 4 s */ }
+  finally {
+    aiCheckRunning = false;
+  }
+}
+
 function updateCountdown() {
+  if (state.snapshot?.room.phase === "checking") void maybeRunAiCheck();
+
   const seconds = getRemainingSeconds();
   const timer = document.getElementById("round-timer");
   if (timer) {
@@ -948,12 +1032,11 @@ function updateCountdown() {
     timer.classList.toggle("timer-urgent", seconds !== null && seconds <= 10);
   }
 
-  if (seconds === 0 && state.snapshot?.room.phase === "answering") {
-    const key = `${state.roomCode}:${state.snapshot.room.round}`;
-    if (timeoutRequestKey !== key) {
-      timeoutRequestKey = key;
-      void runAction("timeout");
-    }
+  // Abgelaufene Runde zügig beenden. Wird wiederholt versucht, bis der
+  // Server bestätigt, dass die Runde zu ist (Geräteuhren können abweichen).
+  if (seconds === 0 && state.snapshot?.room.phase === "answering" && !timeoutInFlight && Date.now() >= timeoutNextTry) {
+    timeoutInFlight = true;
+    void runAction("timeout", true);
   }
 }
 
@@ -1127,16 +1210,48 @@ async function joinRoom() {
   }
 }
 
-async function runAction(actionName) {
-  if (!state.snapshot) return;
-  state.busy = true;
-  setError("");
-  render();
+async function runAction(actionName, silent = false) {
+  if (!state.snapshot) { timeoutInFlight = false; return; }
+  if (!silent) {
+    state.busy = true;
+    setError("");
+    render();
+  }
   try {
     const data = await rpc("advance_game_room", {
       p_code: state.snapshot.room.code,
       p_player_id: state.playerId,
       p_action: actionName,
+    });
+    commitSnapshot(data, true);
+    notifyPeers(data);
+    if (actionName === "timeout") {
+      // Solange die Runde offen ist, in 1,5 s erneut versuchen
+      timeoutNextTry = data?.room?.phase === "answering" ? Date.now() + 1500 : 0;
+    }
+  } catch (err) {
+    if (actionName === "timeout") timeoutNextTry = Date.now() + 1500;
+    if (!silent) setError(err.message);
+  } finally {
+    timeoutInFlight = false;
+    if (!silent) {
+      state.busy = false;
+      render();
+    }
+  }
+}
+
+async function toggleAiCheck() {
+  const snap = state.snapshot;
+  if (!snap) return;
+  state.busy = true;
+  setError("");
+  render();
+  try {
+    const data = await rpc("set_ai_check", {
+      p_code: snap.room.code,
+      p_player_id: state.playerId,
+      p_enabled: !(snap.room.aiCheck ?? true),
     });
     applySnapshot(data);
     notifyPeers(data);
@@ -1390,6 +1505,13 @@ function renderRoom() {
         </div>
       </div>
       <p class="hint-text">${snap.room.roundLimit} Runden · ${snap.room.roundSeconds} Sekunden pro Runde</p>
+      <button class="ai-toggle" data-action="toggle-ai" type="button" role="switch"
+        aria-checked="${(snap.room.aiCheck ?? true) ? "true" : "false"}" ${!isHost || state.busy ? "disabled" : ""}>
+        <span class="ai-toggle-text">
+          <span class="ai-toggle-title">KI prüft Antworten</span>
+        </span>
+        <span class="switch ${(snap.room.aiCheck ?? true) ? "is-on" : ""}" aria-hidden="true"></span>
+      </button>
       <ul class="player-list">${players}</ul>
       ${isHost
         ? `<button class="primary-button full-width" data-action="start" type="button" ${state.busy || snap.players.length < 2 ? "disabled" : ""}>
@@ -1422,8 +1544,7 @@ function renderRoom() {
       </div>
       ${hasSubmitted
         ? `<p class="hint-text">Abgeschickt — ${snap.players.filter((player) => player.submitted).length}/${snap.players.length} fertig.</p>
-           <ul class="status-list" id="answer-status-list">${renderStatusItems(snap.players)}</ul>
-           ${isHost ? `<button class="secondary-button" data-action="reveal" type="button" ${state.busy ? "disabled" : ""}>Runde jetzt auswerten</button>` : ""}`
+           <ul class="status-list" id="answer-status-list">${renderStatusItems(snap.players)}</ul>`
         : `<form id="answer-form">
              <div class="answers-grid">${fields}</div>
              ${errorHtml()}
@@ -1432,6 +1553,21 @@ function renderRoom() {
              </button>
            </form>
            <ul class="status-list" id="answer-status-list">${renderStatusItems(snap.players)}</ul>`}
+      <button class="secondary-button full-width" data-action="reveal" type="button" ${state.busy ? "disabled" : ""}>Runde beenden</button>
+    `;
+  }
+
+  if (snap.room.phase === "checking") {
+    content = `
+      <div class="round-row">
+        <span>Runde ${snap.room.round}/${snap.room.roundLimit}</span>
+        <span class="letter-badge">${esc(snap.room.currentLetter)}</span>
+      </div>
+      <div class="checking-box" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>
+        <p class="checking-title">Die KI prüft die Antworten …</p>
+        <p class="hint-text">Das dauert meist nur ein paar Sekunden.</p>
+      </div>
     `;
   }
 
@@ -1449,7 +1585,9 @@ function renderRoom() {
         const result = resultMap.get(player.id);
         const value = (result && result.values[category]) || "—";
         const points = (result && result.points && result.points[category]) ?? 0;
-        return `<td><span class="${value === "—" ? "answer-empty" : ""}">${esc(value)}</span><b class="points-tag">+${points}</b></td>`;
+        const rejected = Boolean(result && result.checks && result.checks[category] === false);
+        const cls = value === "—" ? "answer-empty" : rejected ? "answer-rejected" : "";
+        return `<td><span class="${cls}"${rejected ? ' title="Von der KI abgelehnt"' : ""}>${esc(value)}</span>${rejected ? '<span class="reject-mark" aria-label="abgelehnt">✗</span>' : ""}<b class="points-tag">+${points}</b></td>`;
       }).join("");
       return `<tr><th>${esc(category)}</th>${cells}</tr>`;
     }).join("");
@@ -1466,6 +1604,8 @@ function renderRoom() {
           <tbody>${rows}</tbody>
         </table>
       </div>
+      ${snap.room.aiStatus === "ok" ? `<p class="ai-note">✓ Von der KI geprüft · ${esc(snap.room.aiProvider || "")}</p>` : ""}
+      ${snap.room.aiStatus === "failed" || snap.room.aiStatus === "timeout" ? `<p class="ai-note">KI nicht erreichbar – alle Antworten wurden gewertet.</p>` : ""}
       ${isHost
         ? `<button class="primary-button full-width" data-action="next" type="button" ${state.busy ? "disabled" : ""}>
             ${state.busy ? "Einen Moment …" : snap.room.round >= snap.room.roundLimit ? "Endstand anzeigen" : "Nächste Runde"}
@@ -1514,8 +1654,8 @@ function renderSettingsModal() {
   `).join("");
 
   modalRootEl.innerHTML = `
-    <div class="modal-overlay" data-action="close-settings" role="dialog" aria-modal="true" aria-label="Einstellungen">
-      <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-overlay" role="dialog" aria-modal="true" aria-label="Einstellungen">
+      <div class="modal-card">
         <div class="modal-header">
           <h2 class="modal-title">
             <svg class="icon-svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
@@ -1544,6 +1684,7 @@ function render() {
   const active = document.activeElement;
   const focusId = active && active.id ? active.id : null;
   const selectionStart = active && typeof active.selectionStart === "number" ? active.selectionStart : null;
+  const selectionEnd = active && typeof active.selectionEnd === "number" ? active.selectionEnd : null;
 
   renderTopbar();
   if (state.screen === "home") mainEl.innerHTML = renderHome();
@@ -1557,13 +1698,20 @@ function render() {
     if (restored) {
       restored.focus({ preventScroll: true });
       if (selectionStart !== null && typeof restored.setSelectionRange === "function") {
-        try { restored.setSelectionRange(selectionStart, selectionStart); } catch { /* ignore */ }
+        try { restored.setSelectionRange(selectionStart, selectionEnd ?? selectionStart); } catch { /* ignore */ }
       }
     }
   }
 }
 
 document.addEventListener("click", (event) => {
+  // Klick auf den abgedunkelten Hintergrund schließt das Fenster,
+  // Klicks INSIDE der Karte gehen normal weiter.
+  if (event.target.classList.contains("modal-overlay")) {
+    state.showSettings = false;
+    return render();
+  }
+
   const target = event.target.closest("[data-action], [data-remove-category], [data-select-theme]");
   if (!target) return;
 
@@ -1572,6 +1720,7 @@ document.addEventListener("click", (event) => {
   if (target.dataset.action === "open-settings") { state.showSettings = true; return render(); }
   if (target.dataset.action === "close-settings") { state.showSettings = false; return render(); }
   if (target.dataset.action === "add-category") return addCategory();
+  if (target.dataset.action === "toggle-ai") return void toggleAiCheck();
   if (target.dataset.action === "start") return void runAction("start");
   if (target.dataset.action === "reveal") return void runAction("reveal");
   if (target.dataset.action === "next") return void runAction("next");
@@ -1598,13 +1747,13 @@ document.addEventListener("input", (event) => {
     if (key === "roomCode") value = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
     state[key] = value;
     if (key === "roomCode" && el.value !== value) el.value = value;
-    if (state.error) setError("");
+    if (state.error) { setError(""); document.querySelectorAll(".error-text").forEach((node) => node.remove()); }
     return;
   }
   if (el.dataset.number) {
     const value = Number(el.value);
     state[el.dataset.number] = Number.isFinite(value) ? value : 0;
-    if (state.error) setError("");
+    if (state.error) { setError(""); document.querySelectorAll(".error-text").forEach((node) => node.remove()); }
     return;
   }
 
@@ -1641,7 +1790,7 @@ async function boot() {
   const legacyThemes = { sand: "nordic", midnight: "school", forest: "summer", aquarell: "summer" };
   const rawTheme = localStorage.getItem("wortwirbel-theme") || "";
   const savedTheme = legacyThemes[rawTheme] || rawTheme;
-  if (savedTheme === "nordic" || savedTheme === "school" || savedTheme === "summer") {
+  if (savedTheme === "school" || savedTheme === "nordic" || savedTheme === "summer") {
     state.theme = savedTheme;
   }
   document.documentElement.setAttribute("data-theme", state.theme);
